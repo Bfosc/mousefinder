@@ -31,9 +31,11 @@
 
 ### 方法一：下载即用（推荐）
 
-1. 安装 [.NET 8 运行时](https://dotnet.microsoft.com/zh-cn/download/dotnet/8.0)（选择 **ASP.NET Core 运行时** 或 **.NET 桌面运行时**）
-2. 从 [Releases](https://github.com/Bfosc/mousefinder/releases) 下载最新版本
-3. 解压后双击 `启动MouseFinder.bat` 运行
+1. 从 [Releases](https://github.com/Bfosc/mousefinder/releases) 下载 `MouseFinder-win-x64.zip`
+2. 解压
+3. 双击 `启动MouseFinder.bat` 运行
+
+> 无需安装任何运行时，开箱即用。
 
 ### 方法二：从源码构建
 
@@ -42,7 +44,7 @@
 git clone https://github.com/Bfosc/mousefinder.git
 cd mousefinder
 
-# 运行
+# 运行（需要 .NET 8 SDK）
 dotnet run --project src/MouseFinder/MouseFinder.csproj -c Release
 ```
 
