@@ -1,0 +1,600 @@
+<Window x:Class="MouseFinder.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MouseFinder"
+        Title="MouseFinder 设置" Height="700" Width="480"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#0F0F12"
+        Foreground="#CCCCCC">
+
+    <Window.Resources>
+        <!-- ══════════════════════════════════════════════════════════
+             Color Palette
+             ══════════════════════════════════════════════════════════ -->
+        <SolidColorBrush x:Key="AccentBrush" Color="#00BFFF"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#16161A"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#252530"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E8E8F0"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="#8888A0"/>
+        <SolidColorBrush x:Key="TextTertiaryBrush" Color="#666680"/>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Card Section
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="18,16"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Section Header
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,14"/>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Radio Button
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="DarkRadio" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#D0D0D8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="RadioBorder"
+                                Background="Transparent"
+                                BorderBrush="#3A3A45"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12,10"
+                                Margin="-2,-2">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="RadioOuter" Width="18" Height="18"
+                                        CornerRadius="9" BorderThickness="2"
+                                        BorderBrush="#555565" Background="Transparent"
+                                        VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <Ellipse x:Name="RadioInner" Width="8" Height="8"
+                                             Fill="{StaticResource AccentBrush}" Visibility="Collapsed"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="RadioBorder" Property="Background" Value="#1A1A22"/>
+                                <Setter TargetName="RadioBorder" Property="BorderBrush" Value="#4A4A58"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="RadioOuter" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="RadioInner" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="RadioBorder" Property="Background" Value="#12121A"/>
+                                <Setter TargetName="RadioBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Slider
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="ModernSlider" TargetType="Slider">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="1" Height="6" CornerRadius="3"
+                                    Background="#2A2A35" Margin="0,8"/>
+                            <Track x:Name="PART_Track" Grid.Row="1" Margin="0,8">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.DecreaseLarge}">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="6" CornerRadius="3" Background="{StaticResource AccentBrush}"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="{x:Static Slider.IncreaseLarge}">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Height="6" CornerRadius="3" Background="Transparent"/>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Ellipse Width="18" Height="18"
+                                                         Fill="#1A1A22"
+                                                         Stroke="{StaticResource AccentBrush}"
+                                                         StrokeThickness="3"/>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Color Swatch Button - 带文字标签
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="ColorSwatch" TargetType="RadioButton">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="ColorDot" Width="24" Height="24"
+                                     Fill="{TemplateBinding Background}"
+                                     Stroke="#3A3A45" StrokeThickness="2"
+                                     Margin="0,0,8,0"/>
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ColorDot" Property="Stroke" Value="#666680"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ColorDot" Property="Stroke" Value="#FFFFFF"/>
+                                <Setter TargetName="ColorDot" Property="StrokeThickness" Value="3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Toggle Switch
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="ToggleSwitch" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#D0D0D8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal">
+                            <Border x:Name="ToggleTrack" Width="44" Height="24"
+                                    CornerRadius="12" Background="#2A2A35"
+                                    VerticalAlignment="Center" Margin="0,0,14,0">
+                                <Ellipse x:Name="ToggleThumb" Width="18" Height="18"
+                                         Fill="#666680" HorizontalAlignment="Left"
+                                         Margin="3,0,0,0"
+                                         RenderTransformOrigin="0.5,0.5">
+                                    <Ellipse.RenderTransform>
+                                        <TranslateTransform X="0"/>
+                                    </Ellipse.RenderTransform>
+                                </Ellipse>
+                            </Border>
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ToggleTrack" Property="Background" Value="#333345"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ToggleTrack" Property="Background" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="ToggleThumb" Property="Fill" Value="#FFFFFF"/>
+                                <Setter TargetName="ToggleThumb" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <TranslateTransform X="20"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             ComboBox - 黑色字体清晰可见
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="ModernComboBox" TargetType="ComboBox">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#000000"/>
+            <Setter Property="BorderBrush" Value="#3A3A48"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="14,10"/>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             ComboBox Item - 黑色字体清晰可见
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="ModernComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#000000"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="#E0E0E8"/>
+                    <Setter Property="Foreground" Value="#000000"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E8E8F0"/>
+                    <Setter Property="Foreground" Value="#000000"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Accent Button
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="AccentButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="28,12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BtnBorder" CornerRadius="10"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{StaticResource AccentBrush}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#33CCFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#0090CC"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Ghost Button
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="GhostButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#8888A0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="28,12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BtnBorder" CornerRadius="10"
+                                Background="Transparent" BorderBrush="#3A3A48"
+                                BorderThickness="1" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#1A1A25"/>
+                                <Setter TargetName="BtnBorder" Property="BorderBrush" Value="#505068"/>
+                                <Setter Property="Foreground" Value="#C0C0D0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="#222230"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Hotkey Badge
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="KeyBadge" TargetType="Border">
+            <Setter Property="Background" Value="#222230"/>
+            <Setter Property="BorderBrush" Value="#3A3A48"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+        </Style>
+
+        <!-- ══════════════════════════════════════════════════════════
+             Value Badge
+             ══════════════════════════════════════════════════════════ -->
+        <Style x:Key="ValueBadge" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="14,5"/>
+            <Setter Property="Margin" Value="14,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+    </Window.Resources>
+
+    <Grid>
+        <!-- Header accent line -->
+        <Rectangle Height="3" VerticalAlignment="Top">
+            <Rectangle.Fill>
+                <SolidColorBrush Color="#00BFFF"/>
+            </Rectangle.Fill>
+        </Rectangle>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24,20,24,18">
+            <StackPanel>
+
+                <!-- ── Header ──────────────────────────────────── -->
+                <StackPanel Margin="0,0,0,24" Orientation="Horizontal">
+                    <!-- 鼠标箭头图标 -->
+                    <Canvas Width="32" Height="32" Margin="0,0,14,0" VerticalAlignment="Center">
+                        <!-- 黑色边框 -->
+                        <Polygon Points="4,2 4,26 10,20 16,28 20,26 14,18 22,18"
+                                 Stroke="Black" StrokeThickness="3" StrokeLineJoin="Round"
+                                 Fill="#00BFFF"/>
+                        <!-- 天蓝色填充 -->
+                        <Polygon Points="4,2 4,26 10,20 16,28 20,26 14,18 22,18"
+                                 Fill="#00BFFF" Stroke="Transparent"/>
+                    </Canvas>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="MouseFinder" FontSize="26" FontWeight="Bold"
+                                   Foreground="#FFFFFF" Margin="0,0,0,4"/>
+                        <TextBlock Text="鼠标定位器 · v1.0" FontSize="13" Foreground="{StaticResource TextTertiaryBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ── Mode ────────────────────────────────────── -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="工作模式" Style="{StaticResource SectionHeader}"/>
+                        <RadioButton x:Name="ModeGlobal"
+                                     Content="全局模式 — 鼠标静止超时后显示"
+                                     Style="{StaticResource DarkRadio}"
+                                     Checked="ModeRadio_Checked" Tag="Global" GroupName="FinderMode"/>
+                        <RadioButton x:Name="ModeEdge"
+                                     Content="边缘模式 — 鼠标超出屏幕时显示"
+                                     Style="{StaticResource DarkRadio}"
+                                     Checked="ModeRadio_Checked" Tag="EdgeOnly" GroupName="FinderMode"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Style ───────────────────────────────────── -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="指示器风格" Style="{StaticResource SectionHeader}"/>
+                        <ComboBox x:Name="StyleCombo"
+                                  Style="{StaticResource ModernComboBox}"
+                                  SelectionChanged="StyleCombo_SelectionChanged">
+                            <ComboBoxItem Content="🔵  光环 — 脉冲发光圆环" Tag="GlowRing" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="🟢  箭头 — 旋转环绕箭头" Tag="Arrow" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="🟣  涟漪 — 扩散水波纹" Tag="Ripple" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="🔴  聚光灯 — 区域高亮" Tag="Spotlight" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="🎯  十字准星 — 瞄准效果" Tag="Crosshair" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="💫  脉冲信标 — 雷达扫描" Tag="Beacon" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="➡️  大箭头 — 醒目指向箭头" Tag="BigArrow" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="🔰  靶心 — HUD 瞄准界面" Tag="Target" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="🌀  螺旋 — 旋转汇聚引导" Tag="Spiral" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="➡️  边缘箭头 — 指向鼠标方向" Tag="EdgeArrow" Style="{StaticResource ModernComboBoxItem}"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Timeout ─────────────────────────────────── -->
+                <Border x:Name="TimeoutPanel" Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="静止超时时间" Style="{StaticResource SectionHeader}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="TimeoutSlider" Grid.Column="0"
+                                    Style="{StaticResource ModernSlider}"
+                                    Minimum="1" Maximum="30" Value="3"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ValueChanged="TimeoutSlider_ValueChanged"/>
+                            <Border Grid.Column="1" Style="{StaticResource ValueBadge}">
+                                <TextBlock x:Name="TimeoutLabel" Text="3 秒"
+                                           Foreground="#FFFFFF" FontSize="13" FontWeight="SemiBold"/>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Edge Timeout ─────────────────────────────── -->
+                <Border x:Name="EdgeTimeoutPanel" Style="{StaticResource CardBorder}" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="边缘停留时间" Style="{StaticResource SectionHeader}"/>
+                        <TextBlock Text="鼠标需要在边缘停留多久才显示指示器" Foreground="#8888A0" FontSize="11" Margin="0,0,0,10"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="EdgeTimeoutSlider" Grid.Column="0"
+                                    Style="{StaticResource ModernSlider}"
+                                    Minimum="1" Maximum="10" Value="5"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ValueChanged="EdgeTimeoutSlider_ValueChanged"/>
+                            <Border Grid.Column="1" Style="{StaticResource ValueBadge}">
+                                <TextBlock x:Name="EdgeTimeoutLabel" Text="5 秒"
+                                           Foreground="#FFFFFF" FontSize="13" FontWeight="SemiBold"/>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Size ────────────────────────────────────── -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="指示器大小" Style="{StaticResource SectionHeader}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="SizeSlider" Grid.Column="0"
+                                    Style="{StaticResource ModernSlider}"
+                                    Minimum="30" Maximum="150" Value="60"
+                                    TickFrequency="5" IsSnapToTickEnabled="True"
+                                    ValueChanged="SizeSlider_ValueChanged"/>
+                            <Border Grid.Column="1" Style="{StaticResource ValueBadge}">
+                                <TextBlock x:Name="SizeLabel" Text="60 px"
+                                           Foreground="#FFFFFF" FontSize="13" FontWeight="SemiBold"/>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Color ───────────────────────────────────── -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="颜色" Style="{StaticResource SectionHeader}"/>
+                        <!-- 常用颜色 -->
+                        <WrapPanel Margin="0,0,0,12">
+                            <RadioButton x:Name="ColorCyan" Style="{StaticResource ColorSwatch}"
+                                         Checked="ColorRadio_Checked" Tag="#00BFFF" GroupName="RingColor"
+                                         Background="#00BFFF">
+                                <TextBlock Text="青色" Foreground="#E0E0E8" FontSize="13" VerticalAlignment="Center"/>
+                            </RadioButton>
+                            <RadioButton x:Name="ColorGreen" Style="{StaticResource ColorSwatch}"
+                                         Checked="ColorRadio_Checked" Tag="#009944" GroupName="RingColor"
+                                         Background="#009944">
+                                <TextBlock Text="绿色" Foreground="#E0E0E8" FontSize="13" VerticalAlignment="Center"/>
+                            </RadioButton>
+                            <RadioButton x:Name="ColorRed" Style="{StaticResource ColorSwatch}"
+                                         Checked="ColorRadio_Checked" Tag="#FF3333" GroupName="RingColor"
+                                         Background="#FF3333">
+                                <TextBlock Text="红色" Foreground="#E0E0E8" FontSize="13" VerticalAlignment="Center"/>
+                            </RadioButton>
+                            <RadioButton x:Name="ColorYellow" Style="{StaticResource ColorSwatch}"
+                                         Checked="ColorRadio_Checked" Tag="#FFD700" GroupName="RingColor"
+                                         Background="#FFD700">
+                                <TextBlock Text="金色" Foreground="#E0E0E8" FontSize="13" VerticalAlignment="Center"/>
+                            </RadioButton>
+                            <RadioButton x:Name="ColorPurple" Style="{StaticResource ColorSwatch}"
+                                         Checked="ColorRadio_Checked" Tag="#9933FF" GroupName="RingColor"
+                                         Background="#9933FF">
+                                <TextBlock Text="紫色" Foreground="#E0E0E8" FontSize="13" VerticalAlignment="Center"/>
+                            </RadioButton>
+                            <RadioButton x:Name="ColorWhite" Style="{StaticResource ColorSwatch}"
+                                         Checked="ColorRadio_Checked" Tag="#FFFFFF" GroupName="RingColor"
+                                         Background="#FFFFFF">
+                                <TextBlock Text="白色" Foreground="#E0E0E8" FontSize="13" VerticalAlignment="Center"/>
+                            </RadioButton>
+                        </WrapPanel>
+                        <!-- 自定义颜色 -->
+                        <TextBlock Text="自定义颜色" Foreground="#8888A0" FontSize="12" Margin="0,0,0,8"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <!-- 调色盘 - 使用滑块模拟 -->
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="红色" Foreground="#E0E0E8" FontSize="11" Margin="0,0,0,4"/>
+                                    <Slider x:Name="RedSlider" Minimum="0" Maximum="255" Value="0"
+                                            Style="{StaticResource ModernSlider}" ValueChanged="ColorSlider_ValueChanged"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="绿色" Foreground="#E0E0E8" FontSize="11" Margin="0,0,0,4"/>
+                                    <Slider x:Name="GreenSlider" Minimum="0" Maximum="255" Value="153"
+                                            Style="{StaticResource ModernSlider}" ValueChanged="ColorSlider_ValueChanged"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,0,0,8">
+                                    <TextBlock Text="蓝色" Foreground="#E0E0E8" FontSize="11" Margin="0,0,0,4"/>
+                                    <Slider x:Name="BlueSlider" Minimum="0" Maximum="255" Value="68"
+                                            Style="{StaticResource ModernSlider}" ValueChanged="ColorSlider_ValueChanged"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <!-- 预览 -->
+                            <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                                <Ellipse x:Name="ColorPreview" Width="60" Height="60"
+                                         Fill="#009944" Stroke="#3A3A48" StrokeThickness="2"/>
+                                <TextBlock x:Name="ColorHexLabel" Text="#009944"
+                                           Foreground="#E0E0E8" FontSize="11"
+                                           HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Options ─────────────────────────────────── -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="选项" Style="{StaticResource SectionHeader}"/>
+                        <CheckBox x:Name="PulseCheckBox" Content="动画脉冲效果"
+                                  Style="{StaticResource ToggleSwitch}" Margin="0,0,0,14"
+                                  Checked="PulseCheckBox_Changed" Unchecked="PulseCheckBox_Changed"/>
+                        <CheckBox x:Name="StartupCheckBox" Content="开机自启动"
+                                  Style="{StaticResource ToggleSwitch}"
+                                  Checked="StartupCheckBox_Changed" Unchecked="StartupCheckBox_Changed"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Hotkey ──────────────────────────────────── -->
+                <Border Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock Text="快捷键" Style="{StaticResource SectionHeader}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Border Style="{StaticResource KeyBadge}">
+                                <TextBlock Text="Ctrl" Foreground="#E0E0E8" FontSize="13" FontWeight="SemiBold"/>
+                            </Border>
+                            <TextBlock Text="+" Foreground="#666680" FontSize="13" Margin="0,0,6,0"
+                                       VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource KeyBadge}">
+                                <TextBlock Text="Alt" Foreground="#E0E0E8" FontSize="13" FontWeight="SemiBold"/>
+                            </Border>
+                            <TextBlock Text="+" Foreground="#666680" FontSize="13" Margin="0,0,6,0"
+                                       VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource KeyBadge}">
+                                <TextBlock Text="F" Foreground="#E0E0E8" FontSize="13" FontWeight="SemiBold"/>
+                            </Border>
+                            <TextBlock Text="  立即显示 / 隐藏" Foreground="{StaticResource TextTertiaryBrush}" FontSize="13"
+                                       VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Buttons ─────────────────────────────────── -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                    <Button Content="保存设置" Style="{StaticResource AccentButton}"
+                            Click="SaveButton_Click" Margin="0,0,12,0"/>
+                    <Button Content="关闭" Style="{StaticResource GhostButton}"
+                            Click="CloseButton_Click"/>
+                </StackPanel>
+
+                <!-- ── Footer ──────────────────────────────────── -->
+                <TextBlock Text="按 Ctrl+Alt+F 快速呼出指示器"
+                           Foreground="{StaticResource TextTertiaryBrush}"
+                           FontSize="12" HorizontalAlignment="Center"
+                           Margin="0,18,0,0"/>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
