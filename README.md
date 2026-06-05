@@ -29,27 +29,22 @@
 
 ## 🚀 快速开始
 
-### 从源码构建
+### 方法一：下载即用（推荐）
+
+1. 安装 [.NET 8 运行时](https://dotnet.microsoft.com/zh-cn/download/dotnet/8.0)（选择 **ASP.NET Core 运行时** 或 **.NET 桌面运行时**）
+2. 从 [Releases](https://github.com/Bfosc/mousefinder/releases) 下载最新版本
+3. 解压后双击 `启动MouseFinder.bat` 运行
+
+### 方法二：从源码构建
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourname/mousefinding.git
-cd mousefinding
-
-# 构建
-dotnet build src/MouseFinder/MouseFinder.csproj -c Release
+git clone https://github.com/Bfosc/mousefinder.git
+cd mousefinder
 
 # 运行
 dotnet run --project src/MouseFinder/MouseFinder.csproj -c Release
 ```
-
-### 发布单文件
-
-```bash
-dotnet publish src/MouseFinder/MouseFinder.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
-```
-
-生成的 exe 在 `src/MouseFinder/bin/Release/net8.0-windows/win-x64/publish/` 目录下。
 
 ## ⚙️ 配置说明
 
@@ -68,11 +63,15 @@ dotnet publish src/MouseFinder/MouseFinder.csproj -c Release -r win-x64 --self-c
 ## 📁 项目结构
 
 ```
-mousefinding/
+mousefinder/
 ├── MouseFinder.sln
 ├── README.md
 ├── LICENSE
 ├── .gitignore
+├── publish/                          # 发布输出（下载即用）
+│   ├── MouseFinder.dll
+│   ├── 启动MouseFinder.bat
+│   └── ...
 └── src/MouseFinder/
     ├── MouseFinder.csproj
     ├── App.xaml / App.xaml.cs        # 应用入口

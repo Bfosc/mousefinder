@@ -4,11 +4,13 @@ obj/
 *.user
 *.suo
 *.cache
-*.dll
-*.exe
 *.pdb
 *.nupkg
 *.snupkg
+
+# 忽略根目录的 dll/exe，但保留 publish 目录下的
+/*.dll
+/*.exe
 
 ## VS Code
 .vscode/
@@ -42,5 +44,5 @@ bld/
 [Ll]ogs/
 
 ## Publish output
-publish/
+# publish/  # 注释掉，让用户可以直接下载使用
 *.log
