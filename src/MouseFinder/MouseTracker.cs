@@ -25,7 +25,7 @@ public enum EdgeDirection
 /// Uses per-monitor DPI via MonitorFromPoint + GetDpiForMonitor for correct
 /// coordinate conversion on mixed-DPI multi-monitor setups.
 /// </summary>
-public class MouseTracker
+public class MouseTracker : IDisposable
 {
     // ── Win32 ────────────────────────────────────────────────────────
 
@@ -74,9 +74,10 @@ public class MouseTracker
     // Edge mode: dwell time before showing indicator (prevents false triggers)
     private DateTime _edgeEnterTime;
     private bool _edgeInside; // true while cursor is in the edge zone
+    private bool _disposed;
+    private readonly EventHandler _displayChangedHandler;
 
     private const double EdgeMargin = 8;           // pixels — generous enough to avoid false triggers
-    private const double EdgeDwellMs = 5000;        // ms cursor must stay in edge zone before triggering
 
     // ── Constructor ──────────────────────────────────────────────────
 
@@ -90,7 +91,8 @@ public class MouseTracker
         UpdateScreenBounds();
 
         // Re-cache screen bounds when monitors change
-        SystemEvents.DisplaySettingsChanged += (_, _) => UpdateScreenBounds();
+        _displayChangedHandler = (_, _) => UpdateScreenBounds();
+        SystemEvents.DisplaySettingsChanged += _displayChangedHandler;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _timer.Tick += Timer_Tick;
@@ -98,6 +100,16 @@ public class MouseTracker
 
     public void Start() => _timer.Start();
     public void Stop() => _timer.Stop();
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+            _timer.Stop();
+            SystemEvents.DisplaySettingsChanged -= _displayChangedHandler;
+        }
+    }
 
     public void UpdateTimeout(int timeoutMs) => _idleTimeoutMs = timeoutMs;
     public void UpdateEdgeTimeout(int timeoutMs) => _edgeTimeoutMs = timeoutMs;
@@ -242,10 +254,8 @@ public class MouseTracker
                     return dpiX / 96.0;
             }
         }
-        catch
-        {
-            // shcore.dll not available (very old Windows) — fall through to system DPI
-        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
 
         // Fallback: system-wide DPI
         return GetDpiForSystem() / 96.0;

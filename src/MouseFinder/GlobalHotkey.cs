@@ -71,8 +71,10 @@ public class GlobalHotkey : IDisposable
     {
         if (_source != null)
         {
-            UnregisterHotKey(_source.Handle, HOTKEY_ID);
-            _source.Dispose();
+            try { UnregisterHotKey(_source.Handle, HOTKEY_ID); }
+            catch { /* HwndSource may already be disposed during WPF shutdown */ }
+            try { _source.Dispose(); }
+            catch { }
             _source = null;
         }
     }

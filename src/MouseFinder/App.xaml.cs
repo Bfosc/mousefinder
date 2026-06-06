@@ -6,7 +6,7 @@ namespace MouseFinder;
 
 public partial class App : System.Windows.Application
 {
-    private const string MutexName = "Global_MouseFinder_SingleInstance";
+    private const string MutexName = "Local_MouseFinder_SingleInstance";
     private static Mutex? _mutex;
 
     private TrayIcon? _trayIcon;
@@ -106,7 +106,7 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         _globalHotkey?.Dispose();
-        _mouseTracker?.Stop();
+        _mouseTracker?.Dispose();
         _trayIcon?.Dispose();
         _mutex?.ReleaseMutex();
         _mutex?.Dispose();

@@ -236,6 +236,14 @@ public partial class SettingsWindow : System.Windows.Window
             else
                 key.DeleteValue("MouseFinder", false);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            AppSettings.LogError("Failed to set auto-start", ex);
+            System.Windows.MessageBox.Show(
+                $"设置开机启动失败: {ex.Message}",
+                "MouseFinder",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 }

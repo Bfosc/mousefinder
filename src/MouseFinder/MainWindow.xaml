@@ -1,8 +1,0 @@
-<!-- MainWindow.xaml is unused - app uses tray icon and overlay window -->
-<!-- Keeping this file for designer support -->
-<Window x:Class="MouseFinder.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MouseFinder" Height="0" Width="0"
-        WindowStyle="None" ShowInTaskbar="False" Visibility="Hidden">
-</Window>

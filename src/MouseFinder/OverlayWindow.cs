@@ -29,6 +29,18 @@ public class OverlayWindow : Window
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
     [DllImport("user32.dll")]
     private static extern uint GetDpiForSystem();
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
+
+    private const int MDT_EFFECTIVE_DPI = 0;
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
 
     private static readonly IntPtr HWND_TOPMOST = new(-1);
     private const uint SWP_NOACTIVATE = 0x0010;
@@ -111,13 +123,30 @@ public class OverlayWindow : Window
 
     public void ForceShow()
     {
-        var pos = System.Windows.Forms.Cursor.Position;
-        double dpi = GetDpiForSystem();
-        double scale = dpi / 96.0;
+        GetCursorPos(out var pt);
+        double scale = GetScaleForPoint(pt);
         // Convert screen coordinates to virtual-screen-relative coordinates
-        double x = pos.X / scale - SystemParameters.VirtualScreenLeft;
-        double y = pos.Y / scale - SystemParameters.VirtualScreenTop;
+        double x = pt.X / scale - SystemParameters.VirtualScreenLeft;
+        double y = pt.Y / scale - SystemParameters.VirtualScreenTop;
         ShowIndicator(new Point(x, y));
+    }
+
+    private static double GetScaleForPoint(POINT pt)
+    {
+        try
+        {
+            IntPtr hmon = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+            if (hmon != IntPtr.Zero)
+            {
+                int hr = GetDpiForMonitor(hmon, MDT_EFFECTIVE_DPI, out uint dpiX, out _);
+                if (hr == 0 && dpiX > 0)
+                    return dpiX / 96.0;
+            }
+        }
+        catch (System.DllNotFoundException) { }
+        catch (System.EntryPointNotFoundException) { }
+
+        return GetDpiForSystem() / 96.0;
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -269,42 +298,57 @@ public class OverlayWindow : Window
         }
 
         // ══════════════════════════════════════════════════════════════
-        //  Original Styles (经典样式)
+        //  Original Styles (经典样式) — Enhanced
         // ══════════════════════════════════════════════════════════════
 
         // ── Glow Ring (脉冲光环) ─────────────────────────────────────
+        // 6-layer soft glow, smooth breathing pulse, orbiting dashes with trails.
 
         private void DrawGlowRing(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
             double r = _settings!.IndicatorSize / 2;
-            double pulse = _settings.PulseAnimation ? 1.0 + 0.12 * Math.Sin(_phase * 2.5) : 1.0;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.15 * Math.Sin(_phase * 2.5) : 1.0;
             double radius = r * pulse;
 
-            for (int i = 3; i >= 1; i--)
+            // Outer bloom (6 layers, soft falloff)
+            for (int i = 6; i >= 1; i--)
             {
-                double gr = radius + i * 8;
-                byte a = (byte)(20 / i);
-                DrawEllipse(dc, cx, cy, gr, MakePen(a, 6));
+                double gr = radius + i * 10;
+                byte a = (byte)(18 / (i * i) + 2);
+                double w = 10.0 - i;
+                DrawEllipse(dc, cx, cy, gr, MakePen(a, w));
             }
 
-            DrawEllipse(dc, cx, cy, radius, MakePen(200, 3), MakeBrush(30));
+            // Soft inner fill
+            var innerGlow = MakeRadialBrush(cx, cy, radius,
+                (35, 0), (15, 0.4), (5, 0.7), (0, 1));
+            dc.DrawEllipse(innerGlow, null, new Point(cx, cy), radius, radius);
 
-            double dr = 4 * pulse;
-            DrawDot(dc, cx, cy, dr, MakeBrush(220));
+            // Main ring (bright, crisp)
+            DrawEllipse(dc, cx, cy, radius, MakePen(220, 2.5));
 
-            double dashR = radius * 0.7;
-            var dashPen = MakePen(120, 2);
-            for (int i = 0; i < 4; i++)
+            // Orbiting dashes with trailing fade (6 dashes)
+            double dashR = radius * 0.65;
+            for (int i = 0; i < 6; i++)
             {
-                double a = _phase * 1.5 + Math.PI * 2 * i / 4;
+                double a = _phase * 1.8 + Math.PI * 2 * i / 6;
                 double dx = cx + dashR * Math.Cos(a);
                 double dy = cy + dashR * Math.Sin(a);
-                DrawDash(dc, dx, dy, a, 6 * pulse, dashPen);
+                double len = (5 + 3 * Math.Sin(_phase + i)) * pulse;
+                byte alpha = (byte)(160 - i * 15);
+                DrawDash(dc, dx, dy, a + Math.PI / 2, len, MakePen(alpha, 2));
             }
+
+            // Center glow + dot
+            var centerGlow = MakeRadialBrush(cx, cy, 10 * pulse,
+                (80, 0), (30, 0.4), (0, 1));
+            dc.DrawEllipse(centerGlow, null, new Point(cx, cy), 10 * pulse, 10 * pulse);
+            DrawDot(dc, cx, cy, 4 * pulse, MakeBrush(240));
         }
 
         // ── Arrow (旋转箭头) ────────────────────────────────────────
+        // 3 arrows orbiting with glow trails, center pulse, white stroke.
 
         private void DrawArrow(DrawingContext dc)
         {
@@ -313,13 +357,13 @@ public class OverlayWindow : Window
             double orbitR = size * 1.8;
             double pulse = _settings.PulseAnimation ? 1.0 + 0.1 * Math.Sin(_phase * 2) : 1.0;
             var brush = MakeBrush(220);
-            var glowBrush = MakeBrush(60);
-            var centerGlowBrush = MakeBrush(100);
-            var strokePen = MakePen(Color.FromArgb(180, 255, 255, 255), 1.5);
-            var tailPen = MakePen(100, 2);
+            var strokePen = MakePen(Color.FromArgb(200, 255, 255, 255), 1.5);
 
-            DrawEllipse(dc, cx, cy, 12 * pulse, MakePen(0, 0), glowBrush);
-            dc.DrawEllipse(centerGlowBrush, null, new Point(cx, cy), 12 * pulse, 12 * pulse);
+            // Center glow (multi-layer)
+            var outerGlow = MakeRadialBrush(cx, cy, 25 * pulse,
+                (40, 0), (15, 0.3), (5, 0.6), (0, 1));
+            dc.DrawEllipse(outerGlow, null, new Point(cx, cy), 25 * pulse, 25 * pulse);
+            DrawDot(dc, cx, cy, 6 * pulse, MakeBrush(180));
 
             for (int i = 0; i < 3; i++)
             {
@@ -337,6 +381,11 @@ public class OverlayWindow : Window
                 double wing2A = toCenter - Math.PI * 0.75;
                 double wingLen = arrowLen * 0.6;
 
+                // Arrow glow (soft halo)
+                var arrowGlow = MakeRadialBrush(ax, ay, arrowLen,
+                    (20, 0), (8, 0.4), (0, 1));
+                dc.DrawEllipse(arrowGlow, null, new Point(ax, ay), arrowLen, arrowLen);
+
                 var geo = new StreamGeometry();
                 using (var ctx = geo.Open())
                 {
@@ -348,162 +397,249 @@ public class OverlayWindow : Window
                 geo.Freeze();
                 dc.DrawGeometry(brush, strokePen, geo);
 
+                // Tail with fade
                 double tailLen = size * 0.8;
+                var tailPen = MakePen(80, 1.5);
                 DrawLine(dc, ax, ay,
                     ax - tailLen * Math.Cos(toCenter),
                     ay - tailLen * Math.Sin(toCenter), tailPen);
             }
 
-            DrawDot(dc, cx, cy, 5 * pulse, brush);
+            DrawDot(dc, cx, cy, 5 * pulse, MakeBrush(255));
         }
 
         // ── Ripple (涟漪水波) ───────────────────────────────────────
+        // 6 expanding rings with smooth alpha falloff, highlight on each ring.
 
         private void DrawRipple(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
-            double maxR = _settings!.IndicatorSize * 1.5;
-            int ringCount = 4;
+            double maxR = _settings!.IndicatorSize * 1.8;
+            int ringCount = 6;
 
             for (int i = 0; i < ringCount; i++)
             {
-                double t = (_phase * 0.8 + i * 0.8) % (ringCount * 0.8);
-                double progress = t / (ringCount * 0.8);
+                double t = (_phase * 0.7 + i * 0.7) % (ringCount * 0.7);
+                double progress = t / (ringCount * 0.7);
                 double radius = progress * maxR;
-                byte alpha = (byte)(180 * (1 - progress));
+                // Smooth cubic falloff
+                double fade = 1.0 - progress;
+                byte alpha = (byte)(200 * fade * fade);
 
-                if (radius > 0)
+                if (radius > 2)
                 {
-                    double strokeW = 2.5 * (1 - progress * 0.5);
+                    double strokeW = 3.0 * fade;
                     DrawEllipse(dc, cx, cy, radius, MakePen(alpha, strokeW));
+
+                    // Highlight arc on leading edge
+                    if (fade > 0.3)
+                    {
+                        byte hlAlpha = (byte)(100 * fade);
+                        double hlAngle = _phase * 2 + i * 0.5;
+                        double hlR = radius;
+                        double hlLen = Math.PI * 0.3;
+                        for (int s = 0; s < 5; s++)
+                        {
+                            double sa = hlAngle - hlLen + hlLen * 2 * s / 5;
+                            double sx = cx + hlR * Math.Cos(sa);
+                            double sy = cy + hlR * Math.Sin(sa);
+                            DrawDot(dc, sx, sy, 1.5 * fade, MakeBrush(hlAlpha));
+                        }
+                    }
                 }
             }
 
+            // Center glow + dot
+            var centerGlow = MakeRadialBrush(cx, cy, 15,
+                (60, 0), (20, 0.4), (0, 1));
+            dc.DrawEllipse(centerGlow, null, new Point(cx, cy), 15, 15);
             double dotPulse = _settings.PulseAnimation ? 1.0 + 0.2 * Math.Sin(_phase * 3) : 1.0;
-            DrawDot(dc, cx, cy, 5 * dotPulse, MakeBrush(200));
+            DrawDot(dc, cx, cy, 5 * dotPulse, MakeBrush(220));
         }
 
         // ── Spotlight (聚光灯) ──────────────────────────────────────
+        //  Layered radial glow with subtle light rays and dust particles.
 
         private void DrawSpotlight(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
-            double size = _settings!.IndicatorSize * 2;
+            double size = _settings!.IndicatorSize * 2.2;
             double pulse = _settings.PulseAnimation ? 1.0 + 0.08 * Math.Sin(_phase * 2) : 1.0;
             double r = size * pulse;
 
-            var grad = new RadialGradientBrush
-            {
-                Center = new Point(0.5, 0.5),
-                RadiusX = 0.5,
-                RadiusY = 0.5,
-                GradientStops = new GradientStopCollection
-                {
-                    new(Color.FromArgb(80, _baseColor.R, _baseColor.G, _baseColor.B), 0),
-                    new(Color.FromArgb(40, _baseColor.R, _baseColor.G, _baseColor.B), 0.4),
-                    new(Color.FromArgb(10, _baseColor.R, _baseColor.G, _baseColor.B), 0.7),
-                    new(Color.FromArgb(0, _baseColor.R, _baseColor.G, _baseColor.B), 1)
-                }
-            };
-            grad.Freeze();
+            // Outer vignette (dark edge)
+            var vignette = MakeRadialBrush(cx, cy, r * 1.2,
+                (0, 0), (0, 0.6), (5, 0.8), (15, 0.95), (25, 1));
+            dc.DrawEllipse(vignette, null, new Point(cx, cy), r * 1.2, r * 1.2);
 
+            // Main spotlight cone (bright center, smooth falloff)
+            var grad = MakeRadialBrush(cx, cy, r,
+                (90, 0), (55, 0.2), (30, 0.4), (12, 0.6), (4, 0.8), (0, 1));
             dc.DrawEllipse(grad, null, new Point(cx, cy), r, r);
 
-            DrawEllipse(dc, cx, cy, r * 0.25, MakePen(60, 2));
+            // Bright core
+            var core = MakeRadialBrush(cx, cy, r * 0.25,
+                (120, 0), (50, 0.3), (0, 1));
+            dc.DrawEllipse(core, null, new Point(cx, cy), r * 0.25, r * 0.25);
 
+            // Light rays (subtle, rotating)
+            var rayPen = MakePen(15, 1);
+            for (int i = 0; i < 8; i++)
+            {
+                double a = _phase * 0.3 + Math.PI * 2 * i / 8;
+                double inner = r * 0.3;
+                double outer = r * 0.85;
+                DrawLine(dc,
+                    cx + inner * Math.Cos(a), cy + inner * Math.Sin(a),
+                    cx + outer * Math.Cos(a), cy + outer * Math.Sin(a),
+                    rayPen);
+            }
+
+            // Inner ring + crosshair
+            DrawEllipse(dc, cx, cy, r * 0.25, MakePen(60, 1.5));
             double crossSize = 8;
             var crossPen = MakePen(180, 1.5);
             DrawLine(dc, cx - crossSize, cy, cx + crossSize, cy, crossPen);
             DrawLine(dc, cx, cy - crossSize, cx, cy + crossSize, crossPen);
 
-            DrawEllipse(dc, cx, cy, r * 0.95, MakePen(25, 1));
+            // Dust particles (tiny floating dots)
+            for (int i = 0; i < 6; i++)
+            {
+                double a = _phase * 0.5 + Math.PI * 2 * i / 6 + i * 0.7;
+                double dr = r * (0.3 + 0.4 * Math.Sin(_phase + i * 1.3));
+                double dx = cx + dr * Math.Cos(a);
+                double dy = cy + dr * Math.Sin(a);
+                DrawDot(dc, dx, dy, 1.2, MakeBrush((byte)(30 + 10 * i)));
+            }
+
+            DrawEllipse(dc, cx, cy, r * 0.95, MakePen(20, 1));
         }
 
         // ── Crosshair (十字准星) ────────────────────────────────────
+        //  Tactical scope with outer ring, tick marks, distance indicators.
 
         private void DrawCrosshair(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
-            double size = _settings!.IndicatorSize * 0.8;
+            double size = _settings!.IndicatorSize * 0.9;
             double pulse = _settings.PulseAnimation ? 1.0 + 0.05 * Math.Sin(_phase * 3) : 1.0;
-            var colorPen = MakePen(200, 2);
+            var mainPen = MakePen(220, 2);
             var dimPen = MakePen(80, 1.5);
-            var thinPen = MakePen(80, 1);
-            double gap = 8;
+            var thinPen = MakePen(60, 1);
+            double gap = 10;
             double len = size * pulse;
             double rot = _phase * 0.3;
 
+            // Outer scope ring
             DrawEllipse(dc, cx, cy, len, dimPen);
+            DrawEllipse(dc, cx, cy, len * 0.7, MakePen(40, 0.8));
             DrawEllipse(dc, cx, cy, len * 0.15, MakePen(200, 1));
 
-            DrawRotatedLine(dc, cx, cy - gap - len * 0.3, cx, cy - gap, colorPen, cx, cy, rot);
-            DrawRotatedLine(dc, cx, cy + gap, cx, cy + gap + len * 0.3, colorPen, cx, cy, rot);
-            DrawRotatedLine(dc, cx - gap - len * 0.3, cy, cx - gap, cy, colorPen, cx, cy, rot);
-            DrawRotatedLine(dc, cx + gap, cy, cx + gap + len * 0.3, cy, colorPen, cx, cy, rot);
+            // Crosshair arms (gap from center)
+            DrawRotatedLine(dc, cx, cy - gap - len * 0.35, cx, cy - gap, mainPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx, cy + gap, cx, cy + gap + len * 0.35, mainPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx - gap - len * 0.35, cy, cx - gap, cy, mainPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx + gap, cy, cx + gap + len * 0.35, cy, mainPen, cx, cy, rot);
 
-            double tickLen = 4;
-            for (int i = 0; i < 12; i++)
+            // Tick marks on outer ring (major + minor)
+            for (int i = 0; i < 16; i++)
             {
-                double a = rot + Math.PI * 2 * i / 12;
-                double inner = len * 0.85;
-                double outer = len * 0.85 + tickLen;
+                double a = rot + Math.PI * 2 * i / 16;
+                double inner = len * 0.88;
+                double outer = len;
+                double tickW = (i % 4 == 0) ? 4 : 2;
+                var pen = (i % 4 == 0) ? mainPen : thinPen;
                 DrawLine(dc,
                     cx + inner * Math.Cos(a), cy + inner * Math.Sin(a),
                     cx + outer * Math.Cos(a), cy + outer * Math.Sin(a),
-                    thinPen);
+                    pen);
             }
 
-            DrawDot(dc, cx, cy, 2.5, MakeBrush(200));
+            // Diagonal lines (subtle)
+            var diagPen = MakePen(25, 0.5);
+            for (int i = 0; i < 4; i++)
+            {
+                double a = rot + Math.PI * 0.25 + Math.PI * 0.5 * i;
+                DrawLine(dc,
+                    cx + len * 0.2 * Math.Cos(a), cy + len * 0.2 * Math.Sin(a),
+                    cx + len * 0.65 * Math.Cos(a), cy + len * 0.65 * Math.Sin(a),
+                    diagPen);
+            }
+
+            DrawDot(dc, cx, cy, 2.5, MakeBrush(220));
         }
 
         // ── Beacon (脉冲信标) ───────────────────────────────────────
+        //  Radar sweep with gradient fade, glowing blips, scan lines.
 
         private void DrawBeacon(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
-            double maxR = _settings!.IndicatorSize * 1.2;
+            double maxR = _settings!.IndicatorSize * 1.3;
 
             double sweepAngle = _phase * 1.5;
-            double sweepLen = maxR * 0.9;
 
-            for (int i = 0; i < 8; i++)
+            // Radar sweep (gradient fade tail)
+            for (int i = 0; i < 12; i++)
             {
-                double a = sweepAngle - i * 0.08;
-                byte alpha = (byte)(80 - i * 9);
+                double a = sweepAngle - i * 0.06;
+                byte alpha = (byte)(70 - i * 5);
                 if (alpha <= 0) continue;
+                double w = 3.0 - i * 0.2;
                 DrawLine(dc, cx, cy,
-                    cx + sweepLen * Math.Cos(a), cy + sweepLen * Math.Sin(a),
-                    MakePen(alpha, 2 - i * 0.2));
+                    cx + maxR * Math.Cos(a), cy + maxR * Math.Sin(a),
+                    MakePen(alpha, w));
             }
 
-            int ringCount = 3;
-            var ringPen = MakePen(40, 1);
-            for (int i = 1; i <= ringCount; i++)
+            // Sweep glow at leading edge
+            double sweepTipX = cx + maxR * Math.Cos(sweepAngle);
+            double sweepTipY = cy + maxR * Math.Sin(sweepAngle);
+            var sweepGlow = MakeRadialBrush(sweepTipX, sweepTipY, maxR * 0.15,
+                (40, 0), (15, 0.4), (0, 1));
+            dc.DrawEllipse(sweepGlow, null, new Point(sweepTipX, sweepTipY), maxR * 0.15, maxR * 0.15);
+
+            // Concentric rings (4 rings, varying opacity)
+            for (int i = 1; i <= 4; i++)
             {
-                double r = maxR * i / ringCount;
-                DrawEllipse(dc, cx, cy, r, ringPen);
+                double r = maxR * i / 4;
+                byte a = (byte)(30 + 10 * i);
+                DrawEllipse(dc, cx, cy, r, MakePen(a, 0.8));
             }
 
-            var axisPen = MakePen(25, 0.5);
+            // Axis lines (subtle cross)
+            var axisPen = MakePen(20, 0.5);
             DrawLine(dc, cx - maxR, cy, cx + maxR, cy, axisPen);
             DrawLine(dc, cx, cy - maxR, cx, cy + maxR, axisPen);
 
-            for (int i = 0; i < 3; i++)
+            // Glowing blips with halos
+            for (int i = 0; i < 4; i++)
             {
-                double blipAngle = sweepAngle - (i + 1) * 0.5;
-                double blipDist = maxR * (0.3 + i * 0.2);
+                double blipAngle = sweepAngle - (i + 1) * 0.4;
+                double blipDist = maxR * (0.25 + i * 0.18);
                 double bx = cx + blipDist * Math.Cos(blipAngle);
                 double by = cy + blipDist * Math.Sin(blipAngle);
-                double fade = Math.Max(0, 1 - i * 0.35);
-                DrawDot(dc, bx, by, 3 * fade,
-                    new SolidColorBrush(Color.FromArgb((byte)(200 * fade), _baseColor.R, _baseColor.G, _baseColor.B)));
+                double fade = Math.Max(0, 1 - i * 0.25);
+
+                // Blip halo
+                var blipGlow = MakeRadialBrush(bx, by, 8 * fade,
+                    (60, 0), (20, 0.4), (0, 1));
+                dc.DrawEllipse(blipGlow, null, new Point(bx, by), 8 * fade, 8 * fade);
+
+                var blipBrush = new SolidColorBrush(Color.FromArgb((byte)(220 * fade), _baseColor.R, _baseColor.G, _baseColor.B));
+                blipBrush.Freeze();
+                DrawDot(dc, bx, by, 3 * fade, blipBrush);
             }
 
+            // Center dot with pulse
             double dotPulse = _settings.PulseAnimation ? 1.0 + 0.15 * Math.Sin(_phase * 4) : 1.0;
-            DrawDot(dc, cx, cy, 4 * dotPulse, MakeBrush(220));
+            var centerGlow = MakeRadialBrush(cx, cy, 12 * dotPulse,
+                (80, 0), (30, 0.4), (0, 1));
+            dc.DrawEllipse(centerGlow, null, new Point(cx, cy), 12 * dotPulse, 12 * dotPulse);
+            DrawDot(dc, cx, cy, 4 * dotPulse, MakeBrush(240));
         }
 
         // ── Big Arrow (醒目大箭头) ──────────────────────────────────
+        //  Orbiting arrow with motion blur trail, glow halo, center marker.
 
         private void DrawBigArrow(DrawingContext dc)
         {
@@ -543,9 +679,41 @@ public class OverlayWindow : Window
             double n2x = w2x - nx * notchDepth - px * notchDepth * 0.3;
             double n2y = w2y - ny * notchDepth - py * notchDepth * 0.3;
 
-            var glowBrush = MakeBrush(40);
-            dc.DrawEllipse(glowBrush, null, new Point(cx, cy), arrowSize * 0.5, arrowSize * 0.5);
+            // Center glow (multi-layer)
+            var outerGlow = MakeRadialBrush(cx, cy, arrowSize * 0.6,
+                (30, 0), (12, 0.3), (4, 0.6), (0, 1));
+            dc.DrawEllipse(outerGlow, null, new Point(cx, cy), arrowSize * 0.6, arrowSize * 0.6);
 
+            // Motion blur trail (3 faded ghosts)
+            for (int t = 3; t >= 1; t--)
+            {
+                double trailAngle = orbitAngle - t * 0.15;
+                double tx = cx + orbitR * Math.Cos(trailAngle);
+                double ty = cy + orbitR * Math.Sin(trailAngle);
+                double tDirX = cx - tx, tDirY = cy - ty;
+                double tDirLen = Math.Sqrt(tDirX * tDirX + tDirY * tDirY);
+                if (tDirLen < 1) continue;
+                double tnx = tDirX / tDirLen, tny = tDirY / tDirLen;
+                double tpx = -tny, tpy = tnx;
+
+                double tw1x = tx + tpx * wingHalf, tw1y = ty + tpy * wingHalf;
+                double tw2x = tx - tpx * wingHalf, tw2y = ty - tpy * wingHalf;
+                double tTailX = tx - tnx * bodyLen, tTailY = ty - tny * bodyLen;
+
+                var trailGeo = new StreamGeometry();
+                using (var ctx = trailGeo.Open())
+                {
+                    ctx.BeginFigure(new Point(cx, cy), true, true);
+                    ctx.LineTo(new Point(tw1x, tw1y), true, false);
+                    ctx.LineTo(new Point(tTailX, tTailY), true, false);
+                    ctx.LineTo(new Point(tw2x, tw2y), true, false);
+                }
+                trailGeo.Freeze();
+                byte trailAlpha = (byte)(40 / t);
+                dc.DrawGeometry(MakeBrush(trailAlpha), null, trailGeo);
+            }
+
+            // Main arrow
             var geo = new StreamGeometry();
             using (var ctx = geo.Open())
             {
@@ -558,23 +726,20 @@ public class OverlayWindow : Window
             }
             geo.Freeze();
 
-            var fillBrush = MakeBrush(200);
-            var strokePen = MakePen(Color.FromArgb(255, 255, 255, 255), 2);
+            var fillBrush = MakeBrush(210);
+            var strokePen = MakePen(Color.FromArgb(240, 255, 255, 255), 2.5);
             dc.DrawGeometry(fillBrush, strokePen, geo);
 
-            DrawDot(dc, cx, cy, 5, MakeBrush(255));
+            // Arrow tip glow
+            var tipGlow = MakeRadialBrush(tipX, tipY, 12,
+                (60, 0), (20, 0.4), (0, 1));
+            dc.DrawEllipse(tipGlow, null, new Point(tipX, tipY), 12, 12);
 
-            var trailPen = MakePen(80, 2);
-            for (int i = 1; i <= 3; i++)
-            {
-                double t = i * 0.15;
-                double tx = tipX + dirX * t * 0.3;
-                double ty = tipY + dirY * t * 0.3;
-                DrawDot(dc, tx, ty, 2.0 / i, MakeBrush((byte)(120 / i)));
-            }
+            DrawDot(dc, cx, cy, 5, MakeBrush(255));
         }
 
         // ── Target (HUD 靶心) ──────────────────────────────────────
+        //  HUD-style reticle with corner brackets, tick marks, diamond center.
 
         private void DrawTarget(DrawingContext dc)
         {
@@ -586,11 +751,14 @@ public class OverlayWindow : Window
 
             var mainPen = MakePen(220, 2);
             var dimPen = MakePen(100, 1);
-            var thinPen = MakePen(60, 1);
+            var thinPen = MakePen(50, 0.8);
 
+            // Outer ring + inner ring
             DrawEllipse(dc, cx, cy, r, dimPen);
+            DrawEllipse(dc, cx, cy, r * 0.6, MakePen(60, 0.8));
             DrawEllipse(dc, cx, cy, r * 0.35, MakePen(150, 1.5));
 
+            // Center crosshair arms (gap from center)
             double gap = r * 0.12;
             double armLen = r * 0.9;
             DrawRotatedLine(dc, cx, cy - gap, cx, cy - armLen, mainPen, cx, cy, rot);
@@ -598,6 +766,7 @@ public class OverlayWindow : Window
             DrawRotatedLine(dc, cx - gap, cy, cx - armLen, cy, mainPen, cx, cy, rot);
             DrawRotatedLine(dc, cx + gap, cy, cx + armLen, cy, mainPen, cx, cy, rot);
 
+            // Corner brackets (HUD style)
             double bracketLen = r * 0.3;
             double bracketOffset = r * 0.85;
             double bracketAngle = rot + Math.PI * 0.25;
@@ -619,11 +788,11 @@ public class OverlayWindow : Window
                 DrawLine(dc, cornerX, cornerY, arm2X, arm2Y, mainPen);
             }
 
-            double tickLen = r * 0.08;
+            // Tick marks on outer ring (major every 45°, minor every 22.5°)
             for (int i = 0; i < 16; i++)
             {
                 double a = rot + Math.PI * 2 * i / 16;
-                double inner = r - tickLen;
+                double inner = r - (i % 4 == 0 ? r * 0.1 : r * 0.05);
                 double outer = r;
                 var pen = (i % 4 == 0) ? mainPen : thinPen;
                 DrawLine(dc,
@@ -632,7 +801,8 @@ public class OverlayWindow : Window
                     pen);
             }
 
-            double dr = 3;
+            // Diamond center marker
+            double dr = 3.5;
             var diamondPen = MakePen(200, 1.5);
             var diamondGeo = new StreamGeometry();
             using (var ctx = diamondGeo.Open())
@@ -643,20 +813,22 @@ public class OverlayWindow : Window
                 ctx.LineTo(new Point(cx - dr, cy), true, false);
             }
             diamondGeo.Freeze();
-            dc.DrawGeometry(MakeBrush(220), diamondPen, diamondGeo);
+            dc.DrawGeometry(MakeBrush(230), diamondPen, diamondGeo);
         }
 
         // ── Spiral (螺旋汇聚) ──────────────────────────────────────
+        //  4-arm spiral with particle dots along path, converging on center.
 
         private void DrawSpiral(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
             double maxR = _settings!.IndicatorSize * 1.5;
             double pulse = _settings.PulseAnimation ? 1.0 + 0.06 * Math.Sin(_phase * 2) : 1.0;
-            int arms = 3;
+            int arms = 4;
             int segments = 60;
             double rotations = 2.5;
 
+            // Spiral arms with glow
             for (int arm = 0; arm < arms; arm++)
             {
                 double armOffset = Math.PI * 2 * arm / arms + _phase * 0.8;
@@ -679,60 +851,90 @@ public class OverlayWindow : Window
                 }
                 geo.Freeze();
 
-                var outerPen = MakePen(180, 2.5);
-                var innerPen = MakePen(80, 1.5);
-                dc.DrawGeometry(null, outerPen, geo);
-                dc.DrawGeometry(null, innerPen, geo);
+                // Glow layer (wider, dimmer)
+                dc.DrawGeometry(null, MakePen(30, 5), geo);
+                // Main layer
+                dc.DrawGeometry(null, MakePen(180, 2), geo);
+
+                // Particle dots along spiral path
+                for (int i = 0; i < segments; i += 8)
+                {
+                    double t = (double)i / (segments - 1);
+                    byte alpha = (byte)(160 * (1 - t));
+                    double dotR = 2.5 * (1 - t * 0.5) * pulse;
+                    DrawDot(dc, points[i].X, points[i].Y, dotR, MakeBrush(alpha));
+                }
             }
 
+            // Pulsing rings
             for (int i = 1; i <= 3; i++)
             {
                 double ringR = maxR * i / 3 * pulse * (0.3 + 0.1 * Math.Sin(_phase * 3 + i));
-                byte alpha = (byte)(40 + 20 * i);
-                DrawEllipse(dc, cx, cy, ringR, MakePen(alpha, 1));
+                byte alpha = (byte)(35 + 15 * i);
+                DrawEllipse(dc, cx, cy, ringR, MakePen(alpha, 0.8));
             }
 
+            // Center glow + dot
+            var centerGlow = MakeRadialBrush(cx, cy, 15 * pulse,
+                (70, 0), (25, 0.4), (0, 1));
+            dc.DrawEllipse(centerGlow, null, new Point(cx, cy), 15 * pulse, 15 * pulse);
             double dotPulse = _settings.PulseAnimation ? 1.0 + 0.3 * Math.Sin(_phase * 4) : 1.0;
             DrawDot(dc, cx, cy, 6 * dotPulse, MakeBrush(220));
             DrawDot(dc, cx, cy, 3 * dotPulse, MakeBrush(255));
         }
 
         // ══════════════════════════════════════════════════════════════
-        //  New Styles (新样式)
+        //  New Styles (新样式) — Enhanced
         // ══════════════════════════════════════════════════════════════
 
         // ── Minimal Pulse (极简脉冲) ────────────────────────────────
+        //  Elegant breathing ring with multi-layer glow, subtle particles.
 
         private void DrawMinimalPulse(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
             double r = _settings!.IndicatorSize * 0.6;
-            double pulse = _settings.PulseAnimation ? 1.0 + 0.08 * Math.Sin(_phase * 2) : 1.0;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.1 * Math.Sin(_phase * 2) : 1.0;
             double radius = r * pulse;
 
-            // Soft outer glow (very subtle)
-            var glowBrush = MakeRadialBrush(cx, cy, radius * 1.5,
-                (20, 0), (10, 0.3), (3, 0.6), (0, 1));
-            dc.DrawEllipse(glowBrush, null, new Point(cx, cy), radius * 1.5, radius * 1.5);
+            // Outer bloom (3 layers)
+            for (int i = 3; i >= 1; i--)
+            {
+                double glowR = radius + i * 12;
+                byte a = (byte)(8 / i);
+                DrawEllipse(dc, cx, cy, glowR, MakePen(a, 6));
+            }
+
+            // Soft outer glow
+            var glowBrush = MakeRadialBrush(cx, cy, radius * 2,
+                (18, 0), (8, 0.3), (3, 0.6), (0, 1));
+            dc.DrawEllipse(glowBrush, null, new Point(cx, cy), radius * 2, radius * 2);
 
             // Main ring (thin, elegant)
-            DrawEllipse(dc, cx, cy, radius, MakePen(180, 1.5));
+            DrawEllipse(dc, cx, cy, radius, MakePen(200, 1.5));
 
             // Inner subtle fill
             var innerFill = MakeRadialBrush(cx, cy, radius,
-                (15, 0), (5, 0.5), (0, 1));
+                (12, 0), (4, 0.5), (0, 1));
             dc.DrawEllipse(innerFill, null, new Point(cx, cy), radius, radius);
+
+            // Subtle orbiting particles (8 dots)
+            for (int i = 0; i < 8; i++)
+            {
+                double a = _phase * 0.6 + Math.PI * 2 * i / 8;
+                double dr = radius * 0.7;
+                double dx = cx + dr * Math.Cos(a);
+                double dy = cy + dr * Math.Sin(a);
+                DrawDot(dc, dx, dy, 1.2, MakeBrush((byte)(60 + 10 * i)));
+            }
 
             // Center dot (small, precise)
             double dotR = 2.5 * pulse;
-            DrawDot(dc, cx, cy, dotR, MakeBrush(220));
+            DrawDot(dc, cx, cy, dotR, MakeBrush(230));
         }
 
-        // ══════════════════════════════════════════════════════════════
-        //  Style 2: Glass Orb (玻璃光球)
-        //  Frosted glass effect with layered transparency.
-        //  Premium, modern UI feel.
-        // ══════════════════════════════════════════════════════════════
+        // ── Glass Orb (玻璃光球) ───────────────────────────────────
+        //  Multi-layer glass body with specular highlights, rim light, depth.
 
         private void DrawGlassOrb(DrawingContext dc)
         {
@@ -741,186 +943,226 @@ public class OverlayWindow : Window
             double pulse = _settings.PulseAnimation ? 1.0 + 0.06 * Math.Sin(_phase * 2) : 1.0;
             double radius = r * pulse;
 
-            // Outer diffuse glow
-            var outerGlow = MakeRadialBrush(cx, cy, radius * 2,
-                (25, 0), (12, 0.2), (5, 0.4), (1, 0.7), (0, 1));
-            dc.DrawEllipse(outerGlow, null, new Point(cx, cy), radius * 2, radius * 2);
+            // Outer diffuse glow (wide, soft)
+            var outerGlow = MakeRadialBrush(cx, cy, radius * 2.5,
+                (20, 0), (10, 0.15), (5, 0.3), (2, 0.5), (0, 0.8), (0, 1));
+            dc.DrawEllipse(outerGlow, null, new Point(cx, cy), radius * 2.5, radius * 2.5);
 
-            // Glass body (layered transparency)
+            // Glass body (layered transparency with depth)
             var glassBody = MakeRadialBrush(cx, cy, radius,
-                (40, 0), (25, 0.3), (15, 0.5), (8, 0.7), (2, 0.9), (0, 1));
+                (45, 0), (30, 0.2), (18, 0.4), (10, 0.6), (4, 0.8), (1, 0.95), (0, 1));
             dc.DrawEllipse(glassBody, null, new Point(cx, cy), radius, radius);
 
-            // Highlight (top-left reflection)
-            double highlightOffset = radius * 0.25;
-            var highlight = MakeRadialBrush(cx - highlightOffset, cy - highlightOffset, radius * 0.4,
-                (50, 0), (20, 0.3), (0, 1));
-            dc.DrawEllipse(highlight, null, new Point(cx - highlightOffset, cy - highlightOffset),
-                radius * 0.4, radius * 0.4);
+            // Rim light (edge highlight)
+            DrawEllipse(dc, cx, cy, radius * 0.97, MakePen(40, 1.5));
 
-            // Subtle ring
-            DrawEllipse(dc, cx, cy, radius * 0.95, MakePen(30, 1));
+            // Primary highlight (top-left, large)
+            double hlX = cx - radius * 0.25, hlY = cy - radius * 0.25;
+            var highlight = MakeRadialBrush(hlX, hlY, radius * 0.45,
+                (55, 0), (25, 0.3), (8, 0.6), (0, 1));
+            dc.DrawEllipse(highlight, null, new Point(hlX, hlY), radius * 0.45, radius * 0.45);
+
+            // Secondary highlight (small, bright specular)
+            double hl2X = cx - radius * 0.15, hl2Y = cy - radius * 0.35;
+            var highlight2 = MakeRadialBrush(hl2X, hl2Y, radius * 0.15,
+                (80, 0), (30, 0.4), (0, 1));
+            dc.DrawEllipse(highlight2, null, new Point(hl2X, hl2Y), radius * 0.15, radius * 0.15);
+
+            // Bottom reflection (subtle)
+            double refY = cy + radius * 0.3;
+            var bottomRef = MakeRadialBrush(cx, refY, radius * 0.3,
+                (15, 0), (5, 0.4), (0, 1));
+            dc.DrawEllipse(bottomRef, null, new Point(cx, refY), radius * 0.3, radius * 0.3);
 
             // Center bright point
             double dotR = 3 * pulse;
-            DrawDot(dc, cx, cy, dotR, MakeBrush(200));
+            DrawDot(dc, cx, cy, dotR, MakeBrush(210));
         }
 
-        // ══════════════════════════════════════════════════════════════
-        //  Style 3: Neon Ring (霓虹光环)
-        //  Vibrant neon glow with multiple layers.
-        //  Cyberpunk aesthetic, high contrast.
-        // ══════════════════════════════════════════════════════════════
+        // ── Neon Ring (霓虹光环) ───────────────────────────────────
+        //  Multi-layer neon glow with flicker, rotating bright spots, center bloom.
 
         private void DrawNeonRing(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
             double r = _settings!.IndicatorSize * 0.7;
-            double pulse = _settings.PulseAnimation ? 1.0 + 0.1 * Math.Sin(_phase * 2.5) : 1.0;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.12 * Math.Sin(_phase * 2.5) : 1.0;
             double radius = r * pulse;
 
-            // Outer neon glow (multiple soft layers)
-            for (int i = 4; i >= 1; i--)
+            // Flicker effect (subtle brightness variation)
+            double flicker = 1.0 + 0.05 * Math.Sin(_phase * 8) * Math.Sin(_phase * 3.7);
+
+            // Outer neon bloom (6 layers, wider spread)
+            for (int i = 6; i >= 1; i--)
             {
-                double glowR = radius + i * 10;
-                byte alpha = (byte)(12 / i);
-                DrawEllipse(dc, cx, cy, glowR, MakePen(alpha, 8));
+                double glowR = radius + i * 12;
+                byte a = (byte)(10 * flicker / i);
+                double w = 10.0 - i;
+                DrawEllipse(dc, cx, cy, glowR, MakePen(a, w));
             }
 
             // Main neon ring (bright)
-            DrawEllipse(dc, cx, cy, radius, MakePen(220, 2.5));
+            DrawEllipse(dc, cx, cy, radius, MakePen((byte)(230 * flicker), 2.5));
 
-            // Inner neon ring (dimmer)
-            DrawEllipse(dc, cx, cy, radius * 0.7, MakePen(120, 1.5));
+            // Inner neon ring (dimmer, smaller)
+            DrawEllipse(dc, cx, cy, radius * 0.65, MakePen((byte)(100 * flicker), 1.5));
 
-            // Rotating bright spots
-            int spotCount = 4;
+            // Rotating bright spots with glow halos
+            int spotCount = 5;
             for (int i = 0; i < spotCount; i++)
             {
                 double angle = _phase * 1.5 + Math.PI * 2 * i / spotCount;
                 double sx = cx + radius * Math.Cos(angle);
                 double sy = cy + radius * Math.Sin(angle);
-                double spotR = 3 * pulse;
-                DrawDot(dc, sx, sy, spotR, MakeBrush(255));
+
+                // Spot halo
+                var spotGlow = MakeRadialBrush(sx, sy, 8 * pulse,
+                    (40, 0), (15, 0.4), (0, 1));
+                dc.DrawEllipse(spotGlow, null, new Point(sx, sy), 8 * pulse, 8 * pulse);
+
+                DrawDot(dc, sx, sy, 3 * pulse, MakeBrush(255));
             }
 
             // Center dot with glow
             double dotR = 4 * pulse;
-            var dotGlow = MakeRadialBrush(cx, cy, dotR * 3,
-                (60, 0), (20, 0.4), (0, 1));
-            dc.DrawEllipse(dotGlow, null, new Point(cx, cy), dotR * 3, dotR * 3);
+            var dotGlow = MakeRadialBrush(cx, cy, dotR * 4,
+                (50, 0), (20, 0.3), (5, 0.6), (0, 1));
+            dc.DrawEllipse(dotGlow, null, new Point(cx, cy), dotR * 4, dotR * 4);
             DrawDot(dc, cx, cy, dotR, MakeBrush(255));
         }
 
-        // ══════════════════════════════════════════════════════════════
-        //  Style 4: Particle Field (粒子汇聚)
-        //  Small particles orbiting and converging on cursor.
-        //  Dynamic, organic feel.
-        // ══════════════════════════════════════════════════════════════
+        // ── Particle Field (粒子汇聚) ──────────────────────────────
+        //  Dense particle orbits with glowing trails, multi-ring structure.
 
         private void DrawParticleField(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
-            double r = _settings!.IndicatorSize * 1.2;
+            double r = _settings!.IndicatorSize * 1.3;
             double pulse = _settings.PulseAnimation ? 1.0 + 0.05 * Math.Sin(_phase * 2) : 1.0;
 
-            // Outer particle ring
-            int particleCount = 12;
+            // Outer particle ring (16 particles)
+            int particleCount = 16;
             for (int i = 0; i < particleCount; i++)
             {
                 double angle = _phase * 0.8 + Math.PI * 2 * i / particleCount;
-                double orbitR = r * (0.8 + 0.2 * Math.Sin(_phase * 2 + i));
+                double orbitR = r * (0.8 + 0.2 * Math.Sin(_phase * 2 + i * 0.7));
                 double px = cx + orbitR * Math.Cos(angle);
                 double py = cy + orbitR * Math.Sin(angle);
 
-                // Particle with trail
-                double particleR = 2 * pulse;
-                byte alpha = (byte)(180 - i * 10);
+                double particleR = 2.5 * pulse;
+                byte alpha = (byte)(200 - i * 8);
+
+                // Particle glow
+                var pGlow = MakeRadialBrush(px, py, 6,
+                    (30, 0), (10, 0.4), (0, 1));
+                dc.DrawEllipse(pGlow, null, new Point(px, py), 6, 6);
+
                 DrawDot(dc, px, py, particleR, MakeBrush(alpha));
 
-                // Trail line to center
-                double trailLen = r * 0.3;
+                // Trail line (fading)
+                double trailLen = r * 0.25;
                 double trailAngle = Math.Atan2(cy - py, cx - px);
                 DrawLine(dc, px, py,
                     px + trailLen * Math.Cos(trailAngle),
                     py + trailLen * Math.Sin(trailAngle),
-                    MakePen((byte)(alpha / 3), 1));
+                    MakePen((byte)(alpha / 4), 1));
             }
 
-            // Inner particle ring (slower, smaller)
-            int innerCount = 8;
-            for (int i = 0; i < innerCount; i++)
+            // Middle particle ring (10 particles, counter-rotating)
+            int midCount = 10;
+            for (int i = 0; i < midCount; i++)
             {
-                double angle = -_phase * 0.5 + Math.PI * 2 * i / innerCount;
-                double orbitR = r * 0.4;
+                double angle = -_phase * 0.6 + Math.PI * 2 * i / midCount;
+                double orbitR = r * 0.55;
                 double px = cx + orbitR * Math.Cos(angle);
                 double py = cy + orbitR * Math.Sin(angle);
-                DrawDot(dc, px, py, 1.5 * pulse, MakeBrush(120));
+                DrawDot(dc, px, py, 2 * pulse, MakeBrush(140));
             }
 
+            // Inner particle ring (6 particles, slow)
+            int innerCount = 6;
+            for (int i = 0; i < innerCount; i++)
+            {
+                double angle = _phase * 0.3 + Math.PI * 2 * i / innerCount;
+                double orbitR = r * 0.3;
+                double px = cx + orbitR * Math.Cos(angle);
+                double py = cy + orbitR * Math.Sin(angle);
+                DrawDot(dc, px, py, 1.5 * pulse, MakeBrush(100));
+            }
+
+            // Orbital guide rings (subtle)
+            DrawEllipse(dc, cx, cy, r * 0.8, MakePen(12, 0.5));
+            DrawEllipse(dc, cx, cy, r * 0.55, MakePen(10, 0.5));
+            DrawEllipse(dc, cx, cy, r * 0.3, MakePen(8, 0.5));
+
             // Center soft glow
-            var centerGlow = MakeRadialBrush(cx, cy, r * 0.3,
-                (30, 0), (10, 0.4), (0, 1));
-            dc.DrawEllipse(centerGlow, null, new Point(cx, cy), r * 0.3, r * 0.3);
+            var centerGlow = MakeRadialBrush(cx, cy, r * 0.25,
+                (35, 0), (12, 0.4), (3, 0.7), (0, 1));
+            dc.DrawEllipse(centerGlow, null, new Point(cx, cy), r * 0.25, r * 0.25);
 
             // Center dot
-            DrawDot(dc, cx, cy, 3 * pulse, MakeBrush(200));
+            DrawDot(dc, cx, cy, 3.5 * pulse, MakeBrush(220));
         }
 
-        // ══════════════════════════════════════════════════════════════
-        //  Style 5: Aurora (极光)
-        //  Flowing, organic gradients like northern lights.
-        //  Ethereal, mesmerizing.
-        // ══════════════════════════════════════════════════════════════
+        // ── Aurora (极光) ──────────────────────────────────────────
+        //  5 flowing layers with wobble, shimmer particles, central glow.
 
         private void DrawAurora(DrawingContext dc)
         {
             double cx = _pos.X, cy = _pos.Y;
-            double r = _settings!.IndicatorSize * 1.5;
+            double r = _settings!.IndicatorSize * 1.6;
             double pulse = _settings.PulseAnimation ? 1.0 + 0.04 * Math.Sin(_phase * 1.5) : 1.0;
 
-            // Multiple aurora layers (flowing gradients)
-            for (int layer = 0; layer < 3; layer++)
+            // Aurora layers (5 flowing layers)
+            for (int layer = 0; layer < 5; layer++)
             {
-                double layerOffset = _phase * 0.3 + layer * 0.5;
-                double layerR = r * (0.6 + layer * 0.2) * pulse;
+                double layerOffset = _phase * 0.25 + layer * 0.4;
+                double layerR = r * (0.4 + layer * 0.15) * pulse;
+                int segmentCount = 10;
 
-                // Create flowing shape using multiple ellipses
-                int segmentCount = 8;
                 for (int i = 0; i < segmentCount; i++)
                 {
                     double t = (double)i / segmentCount;
                     double angle = layerOffset + Math.PI * 2 * t;
-                    double wobble = 0.2 * Math.Sin(_phase * 2 + t * Math.PI * 4 + layer);
-                    double segR = layerR * (1 + wobble);
+                    double wobble = 0.25 * Math.Sin(_phase * 1.8 + t * Math.PI * 5 + layer * 0.7);
+                    double wobble2 = 0.1 * Math.Sin(_phase * 3 + t * Math.PI * 3 + layer * 1.3);
+                    double segR = layerR * (1 + wobble + wobble2);
 
                     double sx = cx + segR * Math.Cos(angle);
                     double sy = cy + segR * Math.Sin(angle);
 
-                    byte alpha = (byte)(15 - layer * 3);
-                    double dotR = (8 - layer * 2) * pulse;
+                    byte alpha = (byte)(12 - layer * 2);
+                    double dotR = (10 - layer * 1.5) * pulse;
                     DrawDot(dc, sx, sy, dotR, MakeBrush(alpha));
                 }
             }
 
+            // Shimmer particles (floating bright dots)
+            for (int i = 0; i < 8; i++)
+            {
+                double a = _phase * 0.4 + Math.PI * 2 * i / 8 + i * 0.9;
+                double dr = r * (0.3 + 0.3 * Math.Sin(_phase * 1.5 + i * 2));
+                double dx = cx + dr * Math.Cos(a);
+                double dy = cy + dr * Math.Sin(a);
+                byte alpha = (byte)(40 + 20 * Math.Sin(_phase * 2 + i));
+                DrawDot(dc, dx, dy, 1.5, MakeBrush(alpha));
+            }
+
             // Central aurora glow
-            var auroraGlow = MakeRadialBrush(cx, cy, r * 0.8,
-                (20, 0), (10, 0.3), (4, 0.5), (1, 0.7), (0, 1));
-            dc.DrawEllipse(auroraGlow, null, new Point(cx, cy), r * 0.8, r * 0.8);
+            var auroraGlow = MakeRadialBrush(cx, cy, r * 0.7,
+                (22, 0), (12, 0.2), (5, 0.4), (2, 0.6), (0, 1));
+            dc.DrawEllipse(auroraGlow, null, new Point(cx, cy), r * 0.7, r * 0.7);
 
             // Subtle ring
-            DrawEllipse(dc, cx, cy, r * 0.5, MakePen(15, 1));
+            DrawEllipse(dc, cx, cy, r * 0.4, MakePen(12, 0.8));
 
             // Center dot
             double dotPulse = _settings.PulseAnimation ? 1.0 + 0.15 * Math.Sin(_phase * 3) : 1.0;
-            DrawDot(dc, cx, cy, 3 * dotPulse, MakeBrush(180));
+            DrawDot(dc, cx, cy, 3.5 * dotPulse, MakeBrush(190));
         }
 
-        // ══════════════════════════════════════════════════════════════
-        //  Style 6: Focus Spot (聚焦光斑)
-        //  Theater spotlight effect. Dramatic, clear.
-        //  Directs attention with high contrast.
-        // ══════════════════════════════════════════════════════════════
+        // ── Focus Spot (聚焦光斑) ──────────────────────────────────
+        //  Theater spotlight with light rays, vignette, dust particles, crosshair.
 
         private void DrawFocusSpot(DrawingContext dc)
         {
@@ -929,39 +1171,59 @@ public class OverlayWindow : Window
             double pulse = _settings.PulseAnimation ? 1.0 + 0.06 * Math.Sin(_phase * 2) : 1.0;
             double radius = r * pulse;
 
-            // Outer shadow/vignette
-            var vignette = MakeRadialBrush(cx, cy, radius * 1.8,
-                (0, 0), (0, 0.5), (5, 0.7), (15, 0.85), (25, 1));
-            dc.DrawEllipse(vignette, null, new Point(cx, cy), radius * 1.8, radius * 1.8);
+            // Outer shadow/vignette (deeper)
+            var vignette = MakeRadialBrush(cx, cy, radius * 2.0,
+                (0, 0), (0, 0.4), (3, 0.6), (10, 0.8), (20, 0.95), (30, 1));
+            dc.DrawEllipse(vignette, null, new Point(cx, cy), radius * 2.0, radius * 2.0);
 
-            // Main spotlight (bright center, sharp falloff)
+            // Main spotlight (bright center, smooth falloff)
             var spotlight = MakeRadialBrush(cx, cy, radius,
-                (80, 0), (50, 0.2), (25, 0.4), (8, 0.6), (2, 0.8), (0, 1));
+                (90, 0), (60, 0.15), (35, 0.3), (15, 0.5), (5, 0.7), (1, 0.9), (0, 1));
             dc.DrawEllipse(spotlight, null, new Point(cx, cy), radius, radius);
 
             // Bright core
-            var core = MakeRadialBrush(cx, cy, radius * 0.3,
-                (120, 0), (40, 0.4), (0, 1));
-            dc.DrawEllipse(core, null, new Point(cx, cy), radius * 0.3, radius * 0.3);
+            var core = MakeRadialBrush(cx, cy, radius * 0.25,
+                (130, 0), (50, 0.3), (0, 1));
+            dc.DrawEllipse(core, null, new Point(cx, cy), radius * 0.25, radius * 0.25);
+
+            // Light rays (subtle, rotating)
+            for (int i = 0; i < 12; i++)
+            {
+                double a = _phase * 0.2 + Math.PI * 2 * i / 12;
+                double inner = radius * 0.2;
+                double outer = radius * 0.9;
+                byte alpha = (byte)(12 + 8 * Math.Sin(_phase + i));
+                DrawLine(dc,
+                    cx + inner * Math.Cos(a), cy + inner * Math.Sin(a),
+                    cx + outer * Math.Cos(a), cy + outer * Math.Sin(a),
+                    MakePen(alpha, 0.8));
+            }
 
             // Crosshair (thin, elegant)
             double crossLen = radius * 0.6;
             double gap = radius * 0.08;
-            var crossPen = MakePen(100, 0.8);
+            var crossPen = MakePen(110, 0.8);
             DrawLine(dc, cx, cy - gap - crossLen * 0.3, cx, cy - gap, crossPen);
             DrawLine(dc, cx, cy + gap, cx, cy + gap + crossLen * 0.3, crossPen);
             DrawLine(dc, cx - gap - crossLen * 0.3, cy, cx - gap, cy, crossPen);
             DrawLine(dc, cx + gap, cy, cx + gap + crossLen * 0.3, cy, crossPen);
 
+            // Dust particles
+            for (int i = 0; i < 5; i++)
+            {
+                double a = _phase * 0.4 + Math.PI * 2 * i / 5 + i * 1.1;
+                double dr = radius * (0.2 + 0.5 * Math.Sin(_phase + i * 1.7));
+                double dx = cx + dr * Math.Cos(a);
+                double dy = cy + dr * Math.Sin(a);
+                DrawDot(dc, dx, dy, 1.0, MakeBrush((byte)(25 + 10 * i)));
+            }
+
             // Center dot
-            DrawDot(dc, cx, cy, 2, MakeBrush(200));
+            DrawDot(dc, cx, cy, 2.5, MakeBrush(220));
         }
 
-        // ══════════════════════════════════════════════════════════════
-        //  Style 7: Magnetic Dot (磁力点)
-        //  Smooth, physics-based. Dot follows cursor with spring motion.
-        //  Minimal, Apple-like aesthetic.
-        // ══════════════════════════════════════════════════════════════
+        // ── Magnetic Dot (磁力点) ──────────────────────────────────
+        //  Apple-like minimal dot with multi-orbit field lines, pulse wave.
 
         private void DrawMagneticDot(DrawingContext dc)
         {
@@ -970,34 +1232,43 @@ public class OverlayWindow : Window
             double pulse = _settings.PulseAnimation ? 1.0 + 0.12 * Math.Sin(_phase * 3) : 1.0;
             double radius = r * pulse;
 
-            // Outer magnetic field (soft gradient)
-            var field = MakeRadialBrush(cx, cy, radius * 4,
-                (10, 0), (5, 0.3), (2, 0.5), (0, 0.8), (0, 1));
-            dc.DrawEllipse(field, null, new Point(cx, cy), radius * 4, radius * 4);
+            // Outer magnetic field (wide, soft)
+            var field = MakeRadialBrush(cx, cy, radius * 5,
+                (8, 0), (4, 0.2), (2, 0.4), (0, 0.7), (0, 1));
+            dc.DrawEllipse(field, null, new Point(cx, cy), radius * 5, radius * 5);
 
-            // Orbiting dots (magnetic field lines)
-            int orbitCount = 3;
+            // Pulse wave (expanding ring from center)
+            double waveR = radius * (2 + 2 * ((_phase * 0.5) % 1.0));
+            byte waveAlpha = (byte)(30 * (1 - ((_phase * 0.5) % 1.0)));
+            DrawEllipse(dc, cx, cy, waveR, MakePen(waveAlpha, 1));
+
+            // Orbiting dots (4 orbits, varying speeds)
+            int orbitCount = 4;
             for (int orbit = 0; orbit < orbitCount; orbit++)
             {
-                double orbitR = radius * (2 + orbit * 0.8);
-                int dotCount = 4 + orbit * 2;
-                double speed = 1.0 + orbit * 0.3;
+                double orbitR = radius * (1.8 + orbit * 0.7);
+                int dotCount = 5 + orbit * 2;
+                double speed = 1.2 - orbit * 0.2;
+                double dir = (orbit % 2 == 0) ? 1 : -1;
+
+                // Orbit guide ring (very subtle)
+                DrawEllipse(dc, cx, cy, orbitR, MakePen((byte)(8 + orbit * 2), 0.5));
 
                 for (int i = 0; i < dotCount; i++)
                 {
-                    double angle = _phase * speed + Math.PI * 2 * i / dotCount + orbit * 0.5;
+                    double angle = _phase * speed * dir + Math.PI * 2 * i / dotCount + orbit * 0.4;
                     double dx = cx + orbitR * Math.Cos(angle);
                     double dy = cy + orbitR * Math.Sin(angle);
-                    double dotR = 1.5 - orbit * 0.3;
-                    byte alpha = (byte)(100 - orbit * 25);
+                    double dotR = 2.0 - orbit * 0.3;
+                    byte alpha = (byte)(120 - orbit * 20);
                     DrawDot(dc, dx, dy, dotR, MakeBrush(alpha));
                 }
             }
 
-            // Inner glow
-            var innerGlow = MakeRadialBrush(cx, cy, radius * 2,
-                (25, 0), (10, 0.3), (3, 0.6), (0, 1));
-            dc.DrawEllipse(innerGlow, null, new Point(cx, cy), radius * 2, radius * 2);
+            // Inner glow (multi-layer)
+            var innerGlow = MakeRadialBrush(cx, cy, radius * 2.5,
+                (20, 0), (10, 0.2), (5, 0.4), (2, 0.6), (0, 1));
+            dc.DrawEllipse(innerGlow, null, new Point(cx, cy), radius * 2.5, radius * 2.5);
 
             // Main dot (bright, clean)
             DrawDot(dc, cx, cy, radius, MakeBrush(220));
@@ -1007,6 +1278,7 @@ public class OverlayWindow : Window
         }
 
         // ── Edge Arrow (边缘箭头) ──────────────────────────────────
+        //  Directional arrow from screen edge with glow trail and pulse.
 
         private void DrawEdgeArrow(DrawingContext dc)
         {
@@ -1049,9 +1321,34 @@ public class OverlayWindow : Window
             double n2x = w2x - dirX * notchDepth - px * notchDepth * 0.3;
             double n2y = w2y - dirY * notchDepth - py * notchDepth * 0.3;
 
-            var glowBrush = MakeBrush(40);
-            dc.DrawEllipse(glowBrush, null, new Point(tipX, tipY), arrowSize * 0.3, arrowSize * 0.3);
+            // Tip glow (multi-layer)
+            var tipGlow = MakeRadialBrush(tipX, tipY, arrowSize * 0.5,
+                (40, 0), (15, 0.3), (5, 0.6), (0, 1));
+            dc.DrawEllipse(tipGlow, null, new Point(tipX, tipY), arrowSize * 0.5, arrowSize * 0.5);
 
+            // Motion trail (3 faded ghosts)
+            for (int t = 3; t >= 1; t--)
+            {
+                double trailOffset = t * bodyLen * 0.08;
+                double ttx = tipX + dirX * trailOffset;
+                double tty = tipY + dirY * trailOffset;
+                double tw1x = ttx + px * wingHalf * (1 - t * 0.15), tw1y = tty + py * wingHalf * (1 - t * 0.15);
+                double tw2x = ttx - px * wingHalf * (1 - t * 0.15), tw2y = tty - py * wingHalf * (1 - t * 0.15);
+                double tTailX = ttx - dirX * bodyLen * 0.5, tTailY = tty - dirY * bodyLen * 0.5;
+
+                var trailGeo = new StreamGeometry();
+                using (var ctx = trailGeo.Open())
+                {
+                    ctx.BeginFigure(new Point(ttx, tty), true, true);
+                    ctx.LineTo(new Point(tw1x, tw1y), true, false);
+                    ctx.LineTo(new Point(tTailX, tTailY), true, false);
+                    ctx.LineTo(new Point(tw2x, tw2y), true, false);
+                }
+                trailGeo.Freeze();
+                dc.DrawGeometry(MakeBrush((byte)(30 / t)), null, trailGeo);
+            }
+
+            // Main arrow body
             var geo = new StreamGeometry();
             using (var ctx = geo.Open())
             {
@@ -1064,10 +1361,11 @@ public class OverlayWindow : Window
             }
             geo.Freeze();
 
-            var fillBrush = MakeBrush(200);
-            var strokePen = MakePen(Color.FromArgb(255, 255, 255, 255), 3);
+            var fillBrush = MakeBrush(210);
+            var strokePen = MakePen(Color.FromArgb(240, 255, 255, 255), 3);
             dc.DrawGeometry(fillBrush, strokePen, geo);
 
+            // Tip bright dot
             DrawDot(dc, tipX, tipY, 6, MakeBrush(255));
         }
     }
