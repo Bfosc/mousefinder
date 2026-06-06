@@ -388,15 +388,13 @@
                         <ComboBox x:Name="StyleCombo"
                                   Style="{StaticResource ModernComboBox}"
                                   SelectionChanged="StyleCombo_SelectionChanged">
-                            <ComboBoxItem Content="🔵  光环 — 脉冲发光圆环" Tag="GlowRing" Style="{StaticResource ModernComboBoxItem}"/>
-                            <ComboBoxItem Content="🟢  箭头 — 旋转环绕箭头" Tag="Arrow" Style="{StaticResource ModernComboBoxItem}"/>
-                            <ComboBoxItem Content="🟣  涟漪 — 扩散水波纹" Tag="Ripple" Style="{StaticResource ModernComboBoxItem}"/>
-                            <ComboBoxItem Content="🔴  聚光灯 — 区域高亮" Tag="Spotlight" Style="{StaticResource ModernComboBoxItem}"/>
-                            <ComboBoxItem Content="🎯  十字准星 — 瞄准效果" Tag="Crosshair" Style="{StaticResource ModernComboBoxItem}"/>
-                            <ComboBoxItem Content="💫  脉冲信标 — 雷达扫描" Tag="Beacon" Style="{StaticResource ModernComboBoxItem}"/>
-                            <ComboBoxItem Content="➡️  大箭头 — 醒目指向箭头" Tag="BigArrow" Style="{StaticResource ModernComboBoxItem}"/>
-                            <ComboBoxItem Content="🔰  靶心 — HUD 瞄准界面" Tag="Target" Style="{StaticResource ModernComboBoxItem}"/>
-                            <ComboBoxItem Content="🌀  螺旋 — 旋转汇聚引导" Tag="Spiral" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="✨  极简脉冲 — 简约呼吸光环" Tag="MinimalPulse" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="🔮  玻璃光球 — 毛玻璃质感" Tag="GlassOrb" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="💜  霓虹光环 — 赛博朋克光效" Tag="NeonRing" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="✦  粒子汇聚 — 动态粒子场" Tag="ParticleField" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="🌌  极光 — 流动渐变光效" Tag="Aurora" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="💡  聚焦光斑 — 剧院聚光灯" Tag="FocusSpot" Style="{StaticResource ModernComboBoxItem}"/>
+                            <ComboBoxItem Content="⚪  磁力点 — 苹果风格简约" Tag="MagneticDot" Style="{StaticResource ModernComboBoxItem}"/>
                             <ComboBoxItem Content="➡️  边缘箭头 — 指向鼠标方向" Tag="EdgeArrow" Style="{StaticResource ModernComboBoxItem}"/>
                         </ComboBox>
                     </StackPanel>
