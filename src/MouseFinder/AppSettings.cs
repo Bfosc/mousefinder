@@ -12,14 +12,23 @@ public enum FinderMode
 
 public enum IndicatorStyle
 {
+    GlowRing,         // 脉冲光环
+    Arrow,            // 旋转箭头
+    Ripple,           // 涟漪水波
+    Spotlight,        // 聚光灯
+    Crosshair,        // 十字准星
+    Beacon,           // 脉冲信标
+    BigArrow,         // 醒目大箭头
+    Target,           // HUD 靶心
+    Spiral,           // 螺旋汇聚
+    EdgeArrow,        // 边缘箭头
     MinimalPulse,     // 极简脉冲
     GlassOrb,         // 玻璃光球
     NeonRing,         // 霓虹光环
     ParticleField,    // 粒子汇聚
     Aurora,           // 极光
     FocusSpot,        // 聚焦光斑
-    MagneticDot,      // 磁力点
-    EdgeArrow         // 边缘箭头
+    MagneticDot       // 磁力点
 }
 
 public class AppSettings
@@ -33,7 +42,7 @@ public class AppSettings
     public int IdleTimeoutMs { get; set; } = 3000;
     public int EdgeTimeoutMs { get; set; } = 5000;
     public FinderMode Mode { get; set; } = FinderMode.Global;
-    public IndicatorStyle Style { get; set; } = IndicatorStyle.MinimalPulse;
+    public IndicatorStyle Style { get; set; } = IndicatorStyle.GlowRing;
     public string IndicatorColor { get; set; } = "#009944";
     public double IndicatorSize { get; set; } = 60.0;
     public bool PulseAnimation { get; set; } = true;

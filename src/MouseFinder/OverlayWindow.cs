@@ -162,6 +162,16 @@ public class OverlayWindow : Window
 
             switch (_settings.Style)
             {
+                case IndicatorStyle.GlowRing: DrawGlowRing(dc); break;
+                case IndicatorStyle.Arrow: DrawArrow(dc); break;
+                case IndicatorStyle.Ripple: DrawRipple(dc); break;
+                case IndicatorStyle.Spotlight: DrawSpotlight(dc); break;
+                case IndicatorStyle.Crosshair: DrawCrosshair(dc); break;
+                case IndicatorStyle.Beacon: DrawBeacon(dc); break;
+                case IndicatorStyle.BigArrow: DrawBigArrow(dc); break;
+                case IndicatorStyle.Target: DrawTarget(dc); break;
+                case IndicatorStyle.Spiral: DrawSpiral(dc); break;
+                case IndicatorStyle.EdgeArrow: DrawBigArrow(dc); break;
                 case IndicatorStyle.MinimalPulse: DrawMinimalPulse(dc); break;
                 case IndicatorStyle.GlassOrb: DrawGlassOrb(dc); break;
                 case IndicatorStyle.NeonRing: DrawNeonRing(dc); break;
@@ -169,7 +179,6 @@ public class OverlayWindow : Window
                 case IndicatorStyle.Aurora: DrawAurora(dc); break;
                 case IndicatorStyle.FocusSpot: DrawFocusSpot(dc); break;
                 case IndicatorStyle.MagneticDot: DrawMagneticDot(dc); break;
-                case IndicatorStyle.EdgeArrow: DrawMinimalPulse(dc); break;
             }
         }
 
@@ -252,10 +261,447 @@ public class OverlayWindow : Window
             dc.DrawLine(pen, new Point(rx1, ry1), new Point(rx2, ry2));
         }
 
+        private void DrawDash(DrawingContext dc, double dx, double dy, double angle, double len, Pen pen)
+        {
+            dc.DrawLine(pen,
+                new Point(dx - len * Math.Cos(angle), dy - len * Math.Sin(angle)),
+                new Point(dx + len * Math.Cos(angle), dy + len * Math.Sin(angle)));
+        }
+
         // ══════════════════════════════════════════════════════════════
-        //  Style 1: Minimal Pulse (极简脉冲)
-        //  Clean, modern, minimal. Soft breathing ring with subtle glow.
+        //  Original Styles (经典样式)
         // ══════════════════════════════════════════════════════════════
+
+        // ── Glow Ring (脉冲光环) ─────────────────────────────────────
+
+        private void DrawGlowRing(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double r = _settings!.IndicatorSize / 2;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.12 * Math.Sin(_phase * 2.5) : 1.0;
+            double radius = r * pulse;
+
+            for (int i = 3; i >= 1; i--)
+            {
+                double gr = radius + i * 8;
+                byte a = (byte)(20 / i);
+                DrawEllipse(dc, cx, cy, gr, MakePen(a, 6));
+            }
+
+            DrawEllipse(dc, cx, cy, radius, MakePen(200, 3), MakeBrush(30));
+
+            double dr = 4 * pulse;
+            DrawDot(dc, cx, cy, dr, MakeBrush(220));
+
+            double dashR = radius * 0.7;
+            var dashPen = MakePen(120, 2);
+            for (int i = 0; i < 4; i++)
+            {
+                double a = _phase * 1.5 + Math.PI * 2 * i / 4;
+                double dx = cx + dashR * Math.Cos(a);
+                double dy = cy + dashR * Math.Sin(a);
+                DrawDash(dc, dx, dy, a, 6 * pulse, dashPen);
+            }
+        }
+
+        // ── Arrow (旋转箭头) ────────────────────────────────────────
+
+        private void DrawArrow(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double size = _settings!.IndicatorSize * 0.5;
+            double orbitR = size * 1.8;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.1 * Math.Sin(_phase * 2) : 1.0;
+            var brush = MakeBrush(220);
+            var glowBrush = MakeBrush(60);
+            var centerGlowBrush = MakeBrush(100);
+            var strokePen = MakePen(Color.FromArgb(180, 255, 255, 255), 1.5);
+            var tailPen = MakePen(100, 2);
+
+            DrawEllipse(dc, cx, cy, 12 * pulse, MakePen(0, 0), glowBrush);
+            dc.DrawEllipse(centerGlowBrush, null, new Point(cx, cy), 12 * pulse, 12 * pulse);
+
+            for (int i = 0; i < 3; i++)
+            {
+                double angle = _phase * 1.2 + Math.PI * 2 * i / 3;
+                double ax = cx + orbitR * Math.Cos(angle);
+                double ay = cy + orbitR * Math.Sin(angle);
+
+                double toCenter = Math.Atan2(cy - ay, cx - ax);
+                double arrowLen = size * pulse * 0.6;
+
+                double tipX = ax + arrowLen * Math.Cos(toCenter);
+                double tipY = ay + arrowLen * Math.Sin(toCenter);
+
+                double wing1A = toCenter + Math.PI * 0.75;
+                double wing2A = toCenter - Math.PI * 0.75;
+                double wingLen = arrowLen * 0.6;
+
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(new Point(tipX, tipY), true, true);
+                    ctx.LineTo(new Point(ax + wingLen * Math.Cos(wing1A), ay + wingLen * Math.Sin(wing1A)), true, false);
+                    ctx.LineTo(new Point(ax, ay), true, false);
+                    ctx.LineTo(new Point(ax + wingLen * Math.Cos(wing2A), ay + wingLen * Math.Sin(wing2A)), true, false);
+                }
+                geo.Freeze();
+                dc.DrawGeometry(brush, strokePen, geo);
+
+                double tailLen = size * 0.8;
+                DrawLine(dc, ax, ay,
+                    ax - tailLen * Math.Cos(toCenter),
+                    ay - tailLen * Math.Sin(toCenter), tailPen);
+            }
+
+            DrawDot(dc, cx, cy, 5 * pulse, brush);
+        }
+
+        // ── Ripple (涟漪水波) ───────────────────────────────────────
+
+        private void DrawRipple(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double maxR = _settings!.IndicatorSize * 1.5;
+            int ringCount = 4;
+
+            for (int i = 0; i < ringCount; i++)
+            {
+                double t = (_phase * 0.8 + i * 0.8) % (ringCount * 0.8);
+                double progress = t / (ringCount * 0.8);
+                double radius = progress * maxR;
+                byte alpha = (byte)(180 * (1 - progress));
+
+                if (radius > 0)
+                {
+                    double strokeW = 2.5 * (1 - progress * 0.5);
+                    DrawEllipse(dc, cx, cy, radius, MakePen(alpha, strokeW));
+                }
+            }
+
+            double dotPulse = _settings.PulseAnimation ? 1.0 + 0.2 * Math.Sin(_phase * 3) : 1.0;
+            DrawDot(dc, cx, cy, 5 * dotPulse, MakeBrush(200));
+        }
+
+        // ── Spotlight (聚光灯) ──────────────────────────────────────
+
+        private void DrawSpotlight(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double size = _settings!.IndicatorSize * 2;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.08 * Math.Sin(_phase * 2) : 1.0;
+            double r = size * pulse;
+
+            var grad = new RadialGradientBrush
+            {
+                Center = new Point(0.5, 0.5),
+                RadiusX = 0.5,
+                RadiusY = 0.5,
+                GradientStops = new GradientStopCollection
+                {
+                    new(Color.FromArgb(80, _baseColor.R, _baseColor.G, _baseColor.B), 0),
+                    new(Color.FromArgb(40, _baseColor.R, _baseColor.G, _baseColor.B), 0.4),
+                    new(Color.FromArgb(10, _baseColor.R, _baseColor.G, _baseColor.B), 0.7),
+                    new(Color.FromArgb(0, _baseColor.R, _baseColor.G, _baseColor.B), 1)
+                }
+            };
+            grad.Freeze();
+
+            dc.DrawEllipse(grad, null, new Point(cx, cy), r, r);
+
+            DrawEllipse(dc, cx, cy, r * 0.25, MakePen(60, 2));
+
+            double crossSize = 8;
+            var crossPen = MakePen(180, 1.5);
+            DrawLine(dc, cx - crossSize, cy, cx + crossSize, cy, crossPen);
+            DrawLine(dc, cx, cy - crossSize, cx, cy + crossSize, crossPen);
+
+            DrawEllipse(dc, cx, cy, r * 0.95, MakePen(25, 1));
+        }
+
+        // ── Crosshair (十字准星) ────────────────────────────────────
+
+        private void DrawCrosshair(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double size = _settings!.IndicatorSize * 0.8;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.05 * Math.Sin(_phase * 3) : 1.0;
+            var colorPen = MakePen(200, 2);
+            var dimPen = MakePen(80, 1.5);
+            var thinPen = MakePen(80, 1);
+            double gap = 8;
+            double len = size * pulse;
+            double rot = _phase * 0.3;
+
+            DrawEllipse(dc, cx, cy, len, dimPen);
+            DrawEllipse(dc, cx, cy, len * 0.15, MakePen(200, 1));
+
+            DrawRotatedLine(dc, cx, cy - gap - len * 0.3, cx, cy - gap, colorPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx, cy + gap, cx, cy + gap + len * 0.3, colorPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx - gap - len * 0.3, cy, cx - gap, cy, colorPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx + gap, cy, cx + gap + len * 0.3, cy, colorPen, cx, cy, rot);
+
+            double tickLen = 4;
+            for (int i = 0; i < 12; i++)
+            {
+                double a = rot + Math.PI * 2 * i / 12;
+                double inner = len * 0.85;
+                double outer = len * 0.85 + tickLen;
+                DrawLine(dc,
+                    cx + inner * Math.Cos(a), cy + inner * Math.Sin(a),
+                    cx + outer * Math.Cos(a), cy + outer * Math.Sin(a),
+                    thinPen);
+            }
+
+            DrawDot(dc, cx, cy, 2.5, MakeBrush(200));
+        }
+
+        // ── Beacon (脉冲信标) ───────────────────────────────────────
+
+        private void DrawBeacon(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double maxR = _settings!.IndicatorSize * 1.2;
+
+            double sweepAngle = _phase * 1.5;
+            double sweepLen = maxR * 0.9;
+
+            for (int i = 0; i < 8; i++)
+            {
+                double a = sweepAngle - i * 0.08;
+                byte alpha = (byte)(80 - i * 9);
+                if (alpha <= 0) continue;
+                DrawLine(dc, cx, cy,
+                    cx + sweepLen * Math.Cos(a), cy + sweepLen * Math.Sin(a),
+                    MakePen(alpha, 2 - i * 0.2));
+            }
+
+            int ringCount = 3;
+            var ringPen = MakePen(40, 1);
+            for (int i = 1; i <= ringCount; i++)
+            {
+                double r = maxR * i / ringCount;
+                DrawEllipse(dc, cx, cy, r, ringPen);
+            }
+
+            var axisPen = MakePen(25, 0.5);
+            DrawLine(dc, cx - maxR, cy, cx + maxR, cy, axisPen);
+            DrawLine(dc, cx, cy - maxR, cx, cy + maxR, axisPen);
+
+            for (int i = 0; i < 3; i++)
+            {
+                double blipAngle = sweepAngle - (i + 1) * 0.5;
+                double blipDist = maxR * (0.3 + i * 0.2);
+                double bx = cx + blipDist * Math.Cos(blipAngle);
+                double by = cy + blipDist * Math.Sin(blipAngle);
+                double fade = Math.Max(0, 1 - i * 0.35);
+                DrawDot(dc, bx, by, 3 * fade,
+                    new SolidColorBrush(Color.FromArgb((byte)(200 * fade), _baseColor.R, _baseColor.G, _baseColor.B)));
+            }
+
+            double dotPulse = _settings.PulseAnimation ? 1.0 + 0.15 * Math.Sin(_phase * 4) : 1.0;
+            DrawDot(dc, cx, cy, 4 * dotPulse, MakeBrush(220));
+        }
+
+        // ── Big Arrow (醒目大箭头) ──────────────────────────────────
+
+        private void DrawBigArrow(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double baseSize = _settings!.IndicatorSize * 1.2;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.08 * Math.Sin(_phase * 2) : 1.0;
+            double arrowSize = baseSize * pulse;
+
+            double orbitR = arrowSize * 2.5;
+            double orbitAngle = _phase * 0.6;
+
+            double tipX = cx;
+            double tipY = cy;
+
+            double bodyX = cx + orbitR * Math.Cos(orbitAngle);
+            double bodyY = cy + orbitR * Math.Sin(orbitAngle);
+
+            double wingHalf = arrowSize * 0.45;
+            double bodyLen = arrowSize * 1.6;
+
+            double dirX = tipX - bodyX;
+            double dirY = tipY - bodyY;
+            double dirLen = Math.Sqrt(dirX * dirX + dirY * dirY);
+            if (dirLen < 1) return;
+            double nx = dirX / dirLen, ny = dirY / dirLen;
+            double px = -ny, py = nx;
+
+            double w1x = bodyX + px * wingHalf, w1y = bodyY + py * wingHalf;
+            double w2x = bodyX - px * wingHalf, w2y = bodyY - py * wingHalf;
+
+            double tailX = bodyX - nx * bodyLen;
+            double tailY = bodyY - ny * bodyLen;
+
+            double notchDepth = arrowSize * 0.35;
+            double n1x = w1x - nx * notchDepth + px * notchDepth * 0.3;
+            double n1y = w1y - ny * notchDepth + py * notchDepth * 0.3;
+            double n2x = w2x - nx * notchDepth - px * notchDepth * 0.3;
+            double n2y = w2y - ny * notchDepth - py * notchDepth * 0.3;
+
+            var glowBrush = MakeBrush(40);
+            dc.DrawEllipse(glowBrush, null, new Point(cx, cy), arrowSize * 0.5, arrowSize * 0.5);
+
+            var geo = new StreamGeometry();
+            using (var ctx = geo.Open())
+            {
+                ctx.BeginFigure(new Point(tipX, tipY), true, true);
+                ctx.LineTo(new Point(w1x, w1y), true, false);
+                ctx.LineTo(new Point(n1x, n1y), true, false);
+                ctx.LineTo(new Point(tailX, tailY), true, false);
+                ctx.LineTo(new Point(n2x, n2y), true, false);
+                ctx.LineTo(new Point(w2x, w2y), true, false);
+            }
+            geo.Freeze();
+
+            var fillBrush = MakeBrush(200);
+            var strokePen = MakePen(Color.FromArgb(255, 255, 255, 255), 2);
+            dc.DrawGeometry(fillBrush, strokePen, geo);
+
+            DrawDot(dc, cx, cy, 5, MakeBrush(255));
+
+            var trailPen = MakePen(80, 2);
+            for (int i = 1; i <= 3; i++)
+            {
+                double t = i * 0.15;
+                double tx = tipX + dirX * t * 0.3;
+                double ty = tipY + dirY * t * 0.3;
+                DrawDot(dc, tx, ty, 2.0 / i, MakeBrush((byte)(120 / i)));
+            }
+        }
+
+        // ── Target (HUD 靶心) ──────────────────────────────────────
+
+        private void DrawTarget(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double size = _settings!.IndicatorSize * 1.0;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.04 * Math.Sin(_phase * 3) : 1.0;
+            double r = size * pulse;
+            double rot = _phase * 0.4;
+
+            var mainPen = MakePen(220, 2);
+            var dimPen = MakePen(100, 1);
+            var thinPen = MakePen(60, 1);
+
+            DrawEllipse(dc, cx, cy, r, dimPen);
+            DrawEllipse(dc, cx, cy, r * 0.35, MakePen(150, 1.5));
+
+            double gap = r * 0.12;
+            double armLen = r * 0.9;
+            DrawRotatedLine(dc, cx, cy - gap, cx, cy - armLen, mainPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx, cy + gap, cx, cy + armLen, mainPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx - gap, cy, cx - armLen, cy, mainPen, cx, cy, rot);
+            DrawRotatedLine(dc, cx + gap, cy, cx + armLen, cy, mainPen, cx, cy, rot);
+
+            double bracketLen = r * 0.3;
+            double bracketOffset = r * 0.85;
+            double bracketAngle = rot + Math.PI * 0.25;
+
+            for (int i = 0; i < 4; i++)
+            {
+                double a = bracketAngle + Math.PI * 0.5 * i;
+                double cos = Math.Cos(a), sin = Math.Sin(a);
+
+                double cornerX = cx + bracketOffset * cos;
+                double cornerY = cy + bracketOffset * sin;
+
+                double arm1X = cornerX - sin * bracketLen;
+                double arm1Y = cornerY + cos * bracketLen;
+                double arm2X = cornerX + sin * bracketLen;
+                double arm2Y = cornerY - cos * bracketLen;
+
+                DrawLine(dc, cornerX, cornerY, arm1X, arm1Y, mainPen);
+                DrawLine(dc, cornerX, cornerY, arm2X, arm2Y, mainPen);
+            }
+
+            double tickLen = r * 0.08;
+            for (int i = 0; i < 16; i++)
+            {
+                double a = rot + Math.PI * 2 * i / 16;
+                double inner = r - tickLen;
+                double outer = r;
+                var pen = (i % 4 == 0) ? mainPen : thinPen;
+                DrawLine(dc,
+                    cx + inner * Math.Cos(a), cy + inner * Math.Sin(a),
+                    cx + outer * Math.Cos(a), cy + outer * Math.Sin(a),
+                    pen);
+            }
+
+            double dr = 3;
+            var diamondPen = MakePen(200, 1.5);
+            var diamondGeo = new StreamGeometry();
+            using (var ctx = diamondGeo.Open())
+            {
+                ctx.BeginFigure(new Point(cx, cy - dr), true, true);
+                ctx.LineTo(new Point(cx + dr, cy), true, false);
+                ctx.LineTo(new Point(cx, cy + dr), true, false);
+                ctx.LineTo(new Point(cx - dr, cy), true, false);
+            }
+            diamondGeo.Freeze();
+            dc.DrawGeometry(MakeBrush(220), diamondPen, diamondGeo);
+        }
+
+        // ── Spiral (螺旋汇聚) ──────────────────────────────────────
+
+        private void DrawSpiral(DrawingContext dc)
+        {
+            double cx = _pos.X, cy = _pos.Y;
+            double maxR = _settings!.IndicatorSize * 1.5;
+            double pulse = _settings.PulseAnimation ? 1.0 + 0.06 * Math.Sin(_phase * 2) : 1.0;
+            int arms = 3;
+            int segments = 60;
+            double rotations = 2.5;
+
+            for (int arm = 0; arm < arms; arm++)
+            {
+                double armOffset = Math.PI * 2 * arm / arms + _phase * 0.8;
+                var points = new Point[segments];
+
+                for (int i = 0; i < segments; i++)
+                {
+                    double t = (double)i / (segments - 1);
+                    double r = maxR * (1 - t) * pulse;
+                    double angle = armOffset + rotations * Math.PI * 2 * t;
+                    points[i] = new Point(cx + r * Math.Cos(angle), cy + r * Math.Sin(angle));
+                }
+
+                var geo = new StreamGeometry();
+                using (var ctx = geo.Open())
+                {
+                    ctx.BeginFigure(points[0], false, false);
+                    for (int i = 1; i < segments; i++)
+                        ctx.LineTo(points[i], true, false);
+                }
+                geo.Freeze();
+
+                var outerPen = MakePen(180, 2.5);
+                var innerPen = MakePen(80, 1.5);
+                dc.DrawGeometry(null, outerPen, geo);
+                dc.DrawGeometry(null, innerPen, geo);
+            }
+
+            for (int i = 1; i <= 3; i++)
+            {
+                double ringR = maxR * i / 3 * pulse * (0.3 + 0.1 * Math.Sin(_phase * 3 + i));
+                byte alpha = (byte)(40 + 20 * i);
+                DrawEllipse(dc, cx, cy, ringR, MakePen(alpha, 1));
+            }
+
+            double dotPulse = _settings.PulseAnimation ? 1.0 + 0.3 * Math.Sin(_phase * 4) : 1.0;
+            DrawDot(dc, cx, cy, 6 * dotPulse, MakeBrush(220));
+            DrawDot(dc, cx, cy, 3 * dotPulse, MakeBrush(255));
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        //  New Styles (新样式)
+        // ══════════════════════════════════════════════════════════════
+
+        // ── Minimal Pulse (极简脉冲) ────────────────────────────────
 
         private void DrawMinimalPulse(DrawingContext dc)
         {
